@@ -1,0 +1,34 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Signing / release secrets (never commit)
+*.jks
+*.keystore
+keystore.properties
+upload-keystore.jks
+**/service-account*.json
+**/play-service-account*.json
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
+
+debug.log
+
+build*.log
+*.apk
+

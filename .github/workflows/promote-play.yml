@@ -1,0 +1,120 @@
+name: Promote Google Play track
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: Version code already uploaded to the source track
+        required: true
+        default: "1"
+      version_name:
+        description: Release name shown in Play Console
+        required: true
+        default: "0.1.0"
+      from_track:
+        description: Track that already has this version code
+        required: true
+        default: internal
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+      status:
+        description: Production release status
+        required: true
+        default: completed
+        type: choice
+        options:
+          - completed
+          - draft
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote to production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Play API client
+        run: pip install google-api-python-client google-auth
+
+      - name: Promote the existing build
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          FROM_TRACK: ${{ inputs.from_track }}
+          RELEASE_STATUS: ${{ inputs.status }}
+          RELEASE_NOTES: Host or join Workshop and Adhyayan live rooms with camera and mic on CoinsLive.
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+
+          raw = os.environ["PLAY_SERVICE_ACCOUNT_JSON"]
+          if not raw.strip():
+              sys.exit("Missing PLAY_SERVICE_ACCOUNT_JSON")
+          info = json.loads(raw)
+          creds = service_account.Credentials.from_service_account_info(
+              info, scopes=["https://www.googleapis.com/auth/androidpublisher"]
+          )
+          service = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
+          package = "in.coinslive.live"
+          version_code = str(os.environ["VERSION_CODE"])
+          edit = service.edits().insert(packageName=package, body={}).execute()
+          edit_id = edit["id"]
+          print(f"edit {edit_id}")
+
+          source = service.edits().tracks().get(
+              packageName=package, editId=edit_id, track=os.environ["FROM_TRACK"]
+          ).execute()
+          found = False
+          for release in source.get("releases", []):
+              codes = [str(code) for code in release.get("versionCodes", [])]
+              print(f"source {release.get('status')} {release.get('name')} codes={codes}")
+              if version_code in codes:
+                  found = True
+          if not found:
+              service.edits().delete(packageName=package, editId=edit_id).execute()
+              sys.exit(f"versionCode {version_code} is not on {os.environ['FROM_TRACK']}")
+
+          current = service.edits().tracks().get(
+              packageName=package, editId=edit_id, track="production"
+          ).execute()
+          for release in current.get("releases", []):
+              codes = [str(code) for code in release.get("versionCodes", [])]
+              print(f"production before {release.get('status')} {release.get('name')} codes={codes}")
+
+          updated = service.edits().tracks().update(
+              packageName=package,
+              editId=edit_id,
+              track="production",
+              body={
+                  "track": "production",
+                  "releases": [
+                      {
+                          "name": os.environ["VERSION_NAME"],
+                          "versionCodes": [version_code],
+                          "status": os.environ["RELEASE_STATUS"],
+                          "releaseNotes": [
+                              {"language": "en-US", "text": os.environ["RELEASE_NOTES"]}
+                          ],
+                      }
+                  ],
+              },
+          ).execute()
+          print("production after", json.dumps(updated.get("releases", []), default=str))
+          committed = service.edits().commit(packageName=package, editId=edit_id).execute()
+          print(f"committed edit {committed.get('id')}")
+          PY

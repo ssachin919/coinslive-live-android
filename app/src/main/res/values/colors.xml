@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="coinslive_navy">#0D1B2A</color>
+    <color name="coinslive_brand">#1E88E5</color>
+    <color name="coinslive_tan">#F4A261</color>
+    <color name="coinslive_paper">#F3F0EA</color>
+    <color name="ic_launcher_background">#0D1B2A</color>
+</resources>
