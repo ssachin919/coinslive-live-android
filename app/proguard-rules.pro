@@ -5,8 +5,12 @@
 -keep class livekit.** { *; }
 -keep class org.webrtc.** { *; }
 -keep class com.twilio.audioswitch.** { *; }
+# JNI stubs referenced by LiveKit WebRTC packaging (not always on the compile classpath).
+-dontwarn livekit.org.jni_zero.**
+-dontwarn livekit.org.**
 -dontwarn io.livekit.**
 -dontwarn org.webrtc.**
+-dontwarn tvi.webrtc.**
 
 # Protobuf (used by the LiveKit signalling layer)
 -keep class com.google.protobuf.** { *; }
