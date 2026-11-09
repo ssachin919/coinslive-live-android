@@ -150,6 +150,48 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
     }
 
+    /**
+     * Enable local A/V after connect. Prefer this over RoomScope's `audio`/`video` flags,
+     * which enable media without try/catch and can crash on permission/camera failures.
+     */
+    suspend fun enableLocalMedia(
+        room: Room,
+        enableMic: Boolean,
+        enableCamera: Boolean,
+    ) {
+        if (!_state.value.canPublishMedia) {
+            _state.update { it.copy(isMicEnabled = false, isCameraEnabled = false) }
+            return
+        }
+        var micOn = false
+        var camOn = false
+        var error: String? = null
+        if (enableMic) {
+            try {
+                room.localParticipant.setMicrophoneEnabled(true)
+                micOn = true
+            } catch (e: Exception) {
+                error = e.message ?: "Microphone could not be enabled."
+            }
+        }
+        if (enableCamera) {
+            try {
+                room.localParticipant.setCameraEnabled(true)
+                camOn = true
+            } catch (e: Exception) {
+                error = listOfNotNull(error, e.message ?: "Camera could not be enabled.")
+                    .joinToString(" ")
+            }
+        }
+        _state.update {
+            it.copy(
+                isMicEnabled = micOn,
+                isCameraEnabled = camOn,
+                errorMessage = error ?: it.errorMessage,
+            )
+        }
+    }
+
     /** Called by `RoomScope.onDisconnected` (also fires for the initial disconnected state). */
     fun onRoomDisconnected() {
         if (!hasConnected) return

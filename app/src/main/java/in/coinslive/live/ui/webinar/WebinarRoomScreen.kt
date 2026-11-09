@@ -61,6 +61,7 @@ import `in`.coinslive.live.ui.room.MediaControlBar
 import `in`.coinslive.live.ui.room.ParticipantStage
 import `in`.coinslive.live.ui.room.participantLabel
 import `in`.coinslive.live.theme.CoinsLiveFormat
+import `in`.coinslive.live.util.rememberMediaPermissionState
 import io.livekit.android.compose.local.RoomScope
 import io.livekit.android.compose.state.rememberTracks
 import io.livekit.android.room.Room
@@ -82,6 +83,7 @@ fun WebinarRoomScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
+    val permissions = rememberMediaPermissionState(requestOnEnter = state.canPublishMedia)
 
     LaunchedEffect(Unit) { viewModel.start() }
 
@@ -95,36 +97,55 @@ fun WebinarRoomScreen(
 
     CoinsLiveTheme {
         val liveToken = state.liveToken
-        if (liveToken == null) {
-            ConnectingScreen(
+        when {
+            liveToken == null -> ConnectingScreen(
                 title = state.title ?: viewModel.slug,
                 message = state.errorMessage ?: state.connectionState,
                 failed = state.connectionState == "Failed",
                 onLeave = leaveRoom,
             )
-        } else {
-            RoomScope(
-                url = liveToken.url,
-                token = liveToken.token,
-                audio = state.canPublishMedia,
-                video = state.canPublishMedia,
-                connect = true,
-                onConnected = { viewModel.onRoomConnected() },
-                onDisconnected = { viewModel.onRoomDisconnected() },
-                onError = { _, error -> viewModel.onRoomError(error) },
-            ) { room ->
-                WebinarRoomContent(
-                    room = room,
-                    state = state,
-                    viewModel = viewModel,
-                    onLeave = leaveRoom,
-                    onEnded = {
-                        scope.launch {
-                            viewModel.endWebinar()
-                            onExit()
+
+            state.canPublishMedia && !permissions.resolved -> ConnectingScreen(
+                title = state.title ?: viewModel.slug,
+                message = "Checking permissions...",
+                failed = false,
+                onLeave = leaveRoom,
+            )
+
+            else -> {
+                // Never pass audio/video=true -- RoomScope enables media without try/catch.
+                RoomScope(
+                    url = liveToken.url,
+                    token = liveToken.token,
+                    audio = false,
+                    video = false,
+                    connect = true,
+                    onConnected = { room ->
+                        viewModel.onRoomConnected()
+                        if (state.canPublishMedia) {
+                            viewModel.enableLocalMedia(
+                                room = room,
+                                enableMic = permissions.micGranted,
+                                enableCamera = permissions.cameraGranted,
+                            )
                         }
                     },
-                )
+                    onDisconnected = { viewModel.onRoomDisconnected() },
+                    onError = { _, error -> viewModel.onRoomError(error) },
+                ) { room ->
+                    WebinarRoomContent(
+                        room = room,
+                        state = state,
+                        viewModel = viewModel,
+                        onLeave = leaveRoom,
+                        onEnded = {
+                            scope.launch {
+                                viewModel.endWebinar()
+                                onExit()
+                            }
+                        },
+                    )
+                }
             }
         }
     }

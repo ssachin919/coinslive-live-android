@@ -37,7 +37,11 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
     val slug: String = savedStateHandle.get<String>(Routes.ARG_SLUG).orEmpty()
 
     private val _state = MutableStateFlow(
-        AdhyayanRoomState(title = savedStateHandle.get<String>(Routes.ARG_TITLE)),
+        AdhyayanRoomState(
+            title = savedStateHandle.get<String>(Routes.ARG_TITLE),
+            isMicEnabled = false,
+            isCameraEnabled = false,
+        ),
     )
     val state: StateFlow<AdhyayanRoomState> = _state.asStateFlow()
 
@@ -55,8 +59,9 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                         connectionState = "Connecting…",
                         role = response.role,
                         status = response.status ?: it.status,
-                        isMicEnabled = true,
-                        isCameraEnabled = true,
+                        // Actual A/V starts after RoomScope connects (see enableLocalMedia).
+                        isMicEnabled = false,
+                        isCameraEnabled = false,
                         roomUrl = response.url,
                         roomToken = response.token,
                     )
@@ -86,11 +91,60 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
     }
 
+    fun onMediaPermissionDenied() {
+        _state.update {
+            it.copy(
+                isMicEnabled = false,
+                isCameraEnabled = false,
+                errorMessage = "Camera and microphone permission is required to join Adhyayan.",
+            )
+        }
+    }
+
+    /**
+     * Enable local A/V after connect. Must not be done via RoomScope's `audio`/`video`
+     * flags — those call setMicrophoneEnabled/setCameraEnabled without try/catch and
+     * can crash the process when permission is missing or the camera fails to open.
+     */
+    suspend fun enableLocalMedia(
+        room: Room,
+        enableMic: Boolean,
+        enableCamera: Boolean,
+    ) {
+        var micOn = false
+        var camOn = false
+        var error: String? = null
+        if (enableMic) {
+            try {
+                room.localParticipant.setMicrophoneEnabled(true)
+                micOn = true
+            } catch (e: Exception) {
+                error = e.message ?: "Microphone could not be enabled."
+            }
+        }
+        if (enableCamera) {
+            try {
+                room.localParticipant.setCameraEnabled(true)
+                camOn = true
+            } catch (e: Exception) {
+                error = listOfNotNull(error, e.message ?: "Camera could not be enabled.")
+                    .joinToString(" ")
+            }
+        }
+        _state.update {
+            it.copy(
+                isMicEnabled = micOn,
+                isCameraEnabled = camOn,
+                errorMessage = error ?: it.errorMessage,
+            )
+        }
+    }
+
     suspend fun toggleMic(room: Room) {
         val next = !_state.value.isMicEnabled
         try {
             room.localParticipant.setMicrophoneEnabled(next)
-            _state.update { it.copy(isMicEnabled = next) }
+            _state.update { it.copy(isMicEnabled = next, errorMessage = null) }
         } catch (e: Exception) {
             _state.update { it.copy(errorMessage = e.message) }
         }
@@ -100,7 +154,7 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         val next = !_state.value.isCameraEnabled
         try {
             room.localParticipant.setCameraEnabled(next)
-            _state.update { it.copy(isCameraEnabled = next) }
+            _state.update { it.copy(isCameraEnabled = next, errorMessage = null) }
         } catch (e: Exception) {
             _state.update { it.copy(errorMessage = e.message) }
         }

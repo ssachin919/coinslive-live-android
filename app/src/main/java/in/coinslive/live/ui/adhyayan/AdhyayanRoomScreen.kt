@@ -28,13 +28,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.theme.CoinsLiveColors
+import `in`.coinslive.live.theme.CoinsLiveFormat
 import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CenteredLoading
 import `in`.coinslive.live.ui.room.MediaControlBar
 import `in`.coinslive.live.ui.room.ParticipantGrid
 import `in`.coinslive.live.ui.room.ParticipantStage
 import `in`.coinslive.live.ui.room.participantLabel
-import `in`.coinslive.live.theme.CoinsLiveFormat
+import `in`.coinslive.live.util.rememberMediaPermissionState
 import io.livekit.android.compose.local.RoomScope
 import io.livekit.android.compose.state.rememberTracks
 import io.livekit.android.room.Room
@@ -48,8 +49,11 @@ fun AdhyayanRoomScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
+    val permissions = rememberMediaPermissionState()
 
-    LaunchedEffect(Unit) { viewModel.start() }
+    LaunchedEffect(permissions.resolved) {
+        if (permissions.resolved) viewModel.start()
+    }
 
     val leave: () -> Unit = { onExit() }
     BackHandler(onBack = leave)
@@ -57,49 +61,81 @@ fun AdhyayanRoomScreen(
     CoinsLiveTheme {
         val url = state.roomUrl
         val token = state.roomToken
-        if (url == null || token == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.padding(24.dp),
+        when {
+            !permissions.resolved -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(state.title ?: viewModel.slug, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    if (state.connectionState == "Failed") {
-                        Text(state.errorMessage ?: "Could not join", color = Color(0xFFFF8A80))
-                    } else {
-                        CenteredLoading(Modifier.height(80.dp), label = state.connectionState)
-                    }
-                    TextButton(onClick = leave) { Text("Leave", color = Color.White) }
+                    CenteredLoading(Modifier.height(80.dp), label = "Checking permissions...")
                 }
             }
-        } else {
-            RoomScope(
-                url = url,
-                token = token,
-                audio = true,
-                video = true,
-                connect = true,
-                onConnected = { viewModel.onRoomConnected() },
-                onDisconnected = { viewModel.onRoomDisconnected() },
-                onError = { _, error -> viewModel.onRoomError(error) },
-            ) { room ->
-                AdhyayanRoomContent(
-                    room = room,
-                    state = state,
-                    viewModel = viewModel,
-                    onLeave = leave,
-                    onEnd = {
-                        scope.launch {
-                            if (viewModel.endSession()) onExit()
+
+            url == null || token == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(24.dp),
+                    ) {
+                        Text(
+                            state.title ?: viewModel.slug,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp,
+                        )
+                        if (state.connectionState == "Failed") {
+                            Text(state.errorMessage ?: "Could not join", color = Color(0xFFFF8A80))
+                        } else {
+                            CenteredLoading(Modifier.height(80.dp), label = state.connectionState)
+                        }
+                        TextButton(onClick = leave) { Text("Leave", color = Color.White) }
+                    }
+                }
+            }
+
+            else -> {
+                // Never pass audio/video=true here -- RoomScope enables media without try/catch.
+                RoomScope(
+                    url = url,
+                    token = token,
+                    audio = false,
+                    video = false,
+                    connect = true,
+                    onConnected = { room ->
+                        viewModel.onRoomConnected()
+                        if (!permissions.micGranted && !permissions.cameraGranted) {
+                            viewModel.onMediaPermissionDenied()
+                        } else {
+                            viewModel.enableLocalMedia(
+                                room = room,
+                                enableMic = permissions.micGranted,
+                                enableCamera = permissions.cameraGranted,
+                            )
                         }
                     },
-                )
+                    onDisconnected = { viewModel.onRoomDisconnected() },
+                    onError = { _, error -> viewModel.onRoomError(error) },
+                ) { room ->
+                    AdhyayanRoomContent(
+                        room = room,
+                        state = state,
+                        viewModel = viewModel,
+                        onLeave = leave,
+                        onEnd = {
+                            scope.launch {
+                                if (viewModel.endSession()) onExit()
+                            }
+                        },
+                    )
+                }
             }
         }
     }
