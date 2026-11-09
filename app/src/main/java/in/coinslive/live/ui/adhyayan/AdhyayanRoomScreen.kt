@@ -111,14 +111,18 @@ fun AdhyayanRoomScreen(
                     connect = true,
                     onConnected = { room ->
                         viewModel.onRoomConnected()
-                        if (!permissions.micGranted && !permissions.cameraGranted) {
-                            viewModel.onMediaPermissionDenied()
-                        } else {
-                            viewModel.enableLocalMedia(
-                                room = room,
-                                enableMic = permissions.micGranted,
-                                enableCamera = permissions.cameraGranted,
-                            )
+                        try {
+                            if (!permissions.micGranted && !permissions.cameraGranted) {
+                                viewModel.onMediaPermissionDenied()
+                            } else {
+                                viewModel.enableLocalMedia(
+                                    room = room,
+                                    enableMic = permissions.micGranted,
+                                    enableCamera = permissions.cameraGranted,
+                                )
+                            }
+                        } catch (e: Exception) {
+                            viewModel.onRoomError(e)
                         }
                     },
                     onDisconnected = { viewModel.onRoomDisconnected() },
@@ -159,7 +163,10 @@ private fun AdhyayanRoomContent(
     )
     val cameraTracks = tracks.filter { it.source == Track.Source.CAMERA }
     val sharer = tracks.firstOrNull { it.source == Track.Source.SCREEN_SHARE && it.publication != null }
-    val roomCount = cameraTracks.map { it.participant.sid.value }.distinct().size
+    val roomCount = cameraTracks.mapNotNull {
+        runCatching { it.participant.sid.value }.getOrNull()
+            ?: runCatching { it.participant.identity?.value }.getOrNull()
+    }.distinct().size
 
     Scaffold(
         containerColor = Color.Black,

@@ -26,8 +26,8 @@ android {
         applicationId = "in.coinslive.live"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.coinslive.in\"")
         // Clerk publishable keys are public by design (same as iOS Config.xcconfig).
@@ -70,8 +70,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // LiveKit/WebRTC + R8 has caused release-only native crashes (JniInit / SIGTRAP).
+            // Keep minify off for internal builds until crash stacks are confirmed clean.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -127,7 +129,6 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.clerk.android.ui)
     implementation(libs.livekit.android)
-    implementation(libs.livekit.android.camerax)
     implementation(libs.livekit.compose.components)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

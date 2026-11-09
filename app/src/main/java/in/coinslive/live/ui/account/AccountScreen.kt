@@ -14,6 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,16 +39,19 @@ import `in`.coinslive.live.ui.components.CoinsLiveTopBar
 import `in`.coinslive.live.ui.components.CoinsLiveWordmark
 import `in`.coinslive.live.ui.components.ErrorText
 import `in`.coinslive.live.ui.components.LabeledRow
+import `in`.coinslive.live.util.CrashLog
 import kotlinx.coroutines.launch
 
 @Composable
 fun AccountScreen(auth: AuthSession) {
+    val context = LocalContext.current
     val signedIn by auth.isSignedIn.collectAsState()
     val scope = rememberCoroutineScope()
 
     var confirmDelete by remember { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
+    var crashStack by remember { mutableStateOf(CrashLog.read(context)) }
 
     Scaffold(
         containerColor = CoinsLiveColors.Navy,
@@ -104,6 +111,35 @@ fun AccountScreen(auth: AuthSession) {
                     fontSize = 13.sp,
                     color = CoinsLiveColors.OnLightSecondary,
                 )
+            }
+
+            crashStack?.let { stack ->
+                Section("Last crash (internal)") {
+                    Text(
+                        stack.take(2500),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = {
+                                val clipboard =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("crash", stack))
+                            },
+                        ) {
+                            Text("Copy stack", fontWeight = FontWeight.SemiBold)
+                        }
+                        TextButton(
+                            onClick = {
+                                CrashLog.clear(context)
+                                crashStack = null
+                            },
+                        ) {
+                            Text("Clear")
+                        }
+                    }
+                }
             }
         }
     }

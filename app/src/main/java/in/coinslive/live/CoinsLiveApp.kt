@@ -6,6 +6,7 @@ import `in`.coinslive.live.api.CoinsLiveApiClient
 import `in`.coinslive.live.auth.AuthSession
 import `in`.coinslive.live.config.AppConfig
 import `in`.coinslive.live.storage.WebinarAccessStore
+import `in`.coinslive.live.util.CrashLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +24,7 @@ class CoinsLiveApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        CrashLog.install(this)
 
         accessStore = WebinarAccessStore(this)
         api = CoinsLiveApiClient()

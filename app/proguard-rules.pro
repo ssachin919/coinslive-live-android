@@ -5,14 +5,17 @@
 -keep class livekit.** { *; }
 -keep class org.webrtc.** { *; }
 -keep class com.twilio.audioswitch.** { *; }
--keep class androidx.camera.** { *; }
+# Native WebRTC looks up this class by name; R8 must not strip/rename it (SIGTRAP otherwise).
+-keep class livekit.org.jni_zero.** { *; }
+-keepclassmembers class livekit.org.jni_zero.JniInit {
+    private static java.lang.Object[] init();
+}
 # JNI stubs referenced by LiveKit WebRTC packaging (not always on the compile classpath).
 -dontwarn livekit.org.jni_zero.**
 -dontwarn livekit.org.**
 -dontwarn io.livekit.**
 -dontwarn org.webrtc.**
 -dontwarn tvi.webrtc.**
--dontwarn androidx.camera.**
 
 # LiveKit UniFFI / JNA (data tracks); keep reflective Structure subclasses.
 -dontwarn java.awt.**

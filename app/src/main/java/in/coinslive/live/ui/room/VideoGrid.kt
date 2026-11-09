@@ -116,7 +116,11 @@ fun ParticipantGrid(
     ) {
         items(
             items = cameraTracks,
-            key = { ref -> ref.participant.sid.value + ":" + ref.source.name },
+            key = { ref ->
+                val sid = runCatching { ref.participant.sid.value }.getOrNull().orEmpty()
+                val identity = runCatching { ref.participant.identity?.value }.getOrNull().orEmpty()
+                "${sid.ifBlank { identity }}:${ref.source.name}:${System.identityHashCode(ref.participant)}"
+            },
         ) { ref ->
             ParticipantTile(ref)
         }
