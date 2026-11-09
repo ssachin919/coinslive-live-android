@@ -114,7 +114,7 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           tracks: ${{ steps.release_meta.outputs.track }}
           status: ${{ steps.release_meta.outputs.status }}
-          mappingFile: app/build/outputs/mapping/release/mapping.txt
+          # mappingFile is only present when R8 minify is enabled.
 
   notify-sibling:
     name: Ask about iOS sibling release
