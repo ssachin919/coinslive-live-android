@@ -52,28 +52,23 @@ fun AdhyayanRoomScreen(
     val permissions = rememberMediaPermissionState()
 
     LaunchedEffect(permissions.resolved) {
-        if (permissions.resolved) viewModel.start()
+        if (!permissions.resolved) return@LaunchedEffect
+        if (!permissions.micGranted && !permissions.cameraGranted) {
+            viewModel.onMediaPermissionDenied()
+        }
+        viewModel.start(
+            enableMic = permissions.micGranted,
+            enableCamera = permissions.cameraGranted,
+        )
     }
 
     val leave: () -> Unit = { onExit() }
     BackHandler(onBack = leave)
 
     CoinsLiveTheme {
-        val url = state.roomUrl
-        val token = state.roomToken
+        val room = state.room
         when {
-            !permissions.resolved -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CenteredLoading(Modifier.height(80.dp), label = "Checking permissions...")
-                }
-            }
-
-            url == null || token == null -> {
+            !permissions.resolved || room == null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -94,7 +89,11 @@ fun AdhyayanRoomScreen(
                         if (state.connectionState == "Failed") {
                             Text(state.errorMessage ?: "Could not join", color = Color(0xFFFF8A80))
                         } else {
-                            CenteredLoading(Modifier.height(80.dp), label = state.connectionState)
+                            val label = when {
+                                !permissions.resolved -> "Checking permissions..."
+                                else -> state.connectionState
+                            }
+                            CenteredLoading(Modifier.height(80.dp), label = label)
                         }
                         TextButton(onClick = leave) { Text("Leave", color = Color.White) }
                     }
@@ -102,32 +101,14 @@ fun AdhyayanRoomScreen(
             }
 
             else -> {
-                // Never pass audio/video=true here -- RoomScope enables media without try/catch.
+                // Room is already connected by the ViewModel; RoomScope only provides composition locals.
                 RoomScope(
-                    url = url,
-                    token = token,
+                    passedRoom = room,
+                    connect = false,
+                    disconnectOnDispose = false,
                     audio = false,
                     video = false,
-                    connect = true,
-                    onConnected = { room ->
-                        viewModel.onRoomConnected()
-                        try {
-                            if (!permissions.micGranted && !permissions.cameraGranted) {
-                                viewModel.onMediaPermissionDenied()
-                            } else {
-                                viewModel.enableLocalMedia(
-                                    room = room,
-                                    enableMic = permissions.micGranted,
-                                    enableCamera = permissions.cameraGranted,
-                                )
-                            }
-                        } catch (e: Exception) {
-                            viewModel.onRoomError(e)
-                        }
-                    },
-                    onDisconnected = { viewModel.onRoomDisconnected() },
-                    onError = { _, error -> viewModel.onRoomError(error) },
-                ) { room ->
+                ) {
                     AdhyayanRoomContent(
                         room = room,
                         state = state,
@@ -156,7 +137,6 @@ private fun AdhyayanRoomContent(
 ) {
     val scope = rememberCoroutineScope()
 
-    // Placeholders keep participants with camera off in the grid.
     val tracks by rememberTracks(
         sources = listOf(Track.Source.CAMERA, Track.Source.SCREEN_SHARE),
         usePlaceholders = setOf(Track.Source.CAMERA),
@@ -213,7 +193,7 @@ private fun AdhyayanRoomContent(
                     isMicEnabled = state.isMicEnabled,
                     isCameraEnabled = state.isCameraEnabled,
                     isScreenShareEnabled = state.isScreenShareEnabled,
-                    canScreenShare = false, // TODO: screen share (MediaProjection) on Android.
+                    canScreenShare = false,
                     showEnd = state.isHost && state.status != "ended",
                     onToggleMic = { scope.launch { viewModel.toggleMic(room) } },
                     onToggleCamera = { scope.launch { viewModel.toggleCamera(room) } },

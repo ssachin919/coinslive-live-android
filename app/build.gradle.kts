@@ -26,8 +26,8 @@ android {
         applicationId = "in.coinslive.live"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.1.4"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.coinslive.in\"")
         // Clerk publishable keys are public by design (same as iOS Config.xcconfig).
@@ -37,6 +37,11 @@ android {
             "\"pk_live_Y2xlcmsuY29pbnNsaXZlLmluJA\"",
         )
         manifestPlaceholders["deepLinkScheme"] = "coinslive"
+
+        ndk {
+            // Skip 32-bit ABIs; LiveKit's 32-bit .so files are not 16KB-page aligned.
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {
@@ -107,6 +112,10 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            // Extract .so files; some devices fail to load LiveKit/WebRTC from the APK directly.
+            useLegacyPackaging = true
         }
     }
 }

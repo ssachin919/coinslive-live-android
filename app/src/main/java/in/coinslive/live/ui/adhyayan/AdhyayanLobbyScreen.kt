@@ -53,7 +53,7 @@ import kotlinx.coroutines.launch
 
 data class AdhyayanLobbyState(
     val title: String? = null,
-    val status: String = "…",
+    val status: String = "scheduled",
     val isHost: Boolean = false,
     val joinStatus: String? = null,
     val role: String? = null,

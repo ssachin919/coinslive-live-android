@@ -1,16 +1,25 @@
 package `in`.coinslive.live.ui.adhyayan
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.coinslive.live.CoinsLiveApp
 import `in`.coinslive.live.ui.navigation.Routes
+import `in`.coinslive.live.util.CrashLog
+import io.livekit.android.AudioOptions
+import io.livekit.android.LiveKit
+import io.livekit.android.LiveKitOverrides
+import io.livekit.android.RoomOptions
+import io.livekit.android.audio.AudioHandler
 import io.livekit.android.room.Room
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class AdhyayanRoomState(
     val connectionState: String = "Idle",
@@ -18,76 +27,92 @@ data class AdhyayanRoomState(
     val title: String? = null,
     val status: String = "live",
     val role: String = "learner",
-    val isMicEnabled: Boolean = true,
-    val isCameraEnabled: Boolean = true,
+    val isMicEnabled: Boolean = false,
+    val isCameraEnabled: Boolean = false,
     val isScreenShareEnabled: Boolean = false,
-    /** Non-null once the LiveKit token was fetched; the screen then mounts `RoomScope`. */
-    val roomUrl: String? = null,
-    val roomToken: String? = null,
+    /** Non-null once LiveKit Room is created and connect has been attempted. */
+    val room: Room? = null,
 ) {
     val isHost: Boolean get() = role == "host" || role == "co_host"
 }
 
 /** Video-only Adhyayan room: peer cam/mic. No chat/polls. */
-class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
+class AdhyayanRoomViewModel(
+    application: Application,
+    savedStateHandle: SavedStateHandle,
+) : AndroidViewModel(application) {
     private val app = CoinsLiveApp.instance
     private val api = app.api
     private val auth = app.auth
+    private val appContext = application.applicationContext
 
     val slug: String = savedStateHandle.get<String>(Routes.ARG_SLUG).orEmpty()
 
     private val _state = MutableStateFlow(
-        AdhyayanRoomState(
-            title = savedStateHandle.get<String>(Routes.ARG_TITLE),
-            isMicEnabled = false,
-            isCameraEnabled = false,
-        ),
+        AdhyayanRoomState(title = savedStateHandle.get<String>(Routes.ARG_TITLE)),
     )
     val state: StateFlow<AdhyayanRoomState> = _state.asStateFlow()
 
     private var started = false
+    private var ownedRoom: Room? = null
 
-    fun start() {
+    fun start(enableMic: Boolean, enableCamera: Boolean) {
         if (started) return
         started = true
         viewModelScope.launch {
             _state.update { it.copy(connectionState = "Getting ready…", errorMessage = null) }
             try {
+                CrashLog.breadcrumb(appContext, "adhyayan:fetch_token")
                 val response = api.fetchAdhyayanToken(slug, auth.bearerToken())
                 _state.update {
                     it.copy(
                         connectionState = "Connecting…",
                         role = response.role,
                         status = response.status ?: it.status,
-                        // Actual A/V starts after RoomScope connects (see enableLocalMedia).
-                        isMicEnabled = false,
-                        isCameraEnabled = false,
-                        roomUrl = response.url,
-                        roomToken = response.token,
+                        title = it.title ?: slug,
                     )
                 }
+
+                CrashLog.breadcrumb(appContext, "adhyayan:livekit_init")
+                withContext(Dispatchers.Main.immediate) {
+                    runCatching { LiveKit.init(appContext) }
+                }
+
+                CrashLog.breadcrumb(appContext, "adhyayan:livekit_create")
+                val room = withContext(Dispatchers.Main.immediate) {
+                    LiveKit.create(
+                        appContext = appContext,
+                        options = RoomOptions(adaptiveStream = true, dynacast = true),
+                        overrides = LiveKitOverrides(
+                            // Avoid AudioSwitch/Bluetooth paths that can hard-crash on some OEMs.
+                            audioOptions = AudioOptions(
+                                audioHandler = object : AudioHandler {
+                                    override fun start() = Unit
+                                    override fun stop() = Unit
+                                },
+                            ),
+                        ),
+                    )
+                }
+                ownedRoom = room
+                _state.update { it.copy(room = room) }
+
+                CrashLog.breadcrumb(appContext, "adhyayan:livekit_connect")
+                room.connect(response.url, response.token)
+                CrashLog.breadcrumb(appContext, "adhyayan:connected")
+                _state.update { it.copy(connectionState = "Connected", errorMessage = null) }
+                CrashLog.clearBreadcrumb(appContext)
+
+                enableLocalMedia(room, enableMic, enableCamera)
             } catch (e: Exception) {
-                _state.update { it.copy(connectionState = "Failed", errorMessage = e.message) }
+                CrashLog.write(appContext, e)
+                _state.update {
+                    it.copy(
+                        connectionState = "Failed",
+                        errorMessage = e.message ?: "Could not join the room.",
+                    )
+                }
             }
-        }
-    }
-
-    fun onRoomConnected() {
-        _state.update { it.copy(connectionState = "Connected", errorMessage = null) }
-    }
-
-    fun onRoomDisconnected() {
-        _state.update {
-            if (it.connectionState == "Connected") it.copy(connectionState = "Disconnected") else it
-        }
-    }
-
-    fun onRoomError(error: Exception?) {
-        _state.update {
-            it.copy(
-                connectionState = "Failed",
-                errorMessage = error?.message ?: "Could not connect to the room.",
-            )
         }
     }
 
@@ -101,11 +126,6 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
     }
 
-    /**
-     * Enable local A/V after connect. Must not be done via RoomScope's `audio`/`video`
-     * flags — those call setMicrophoneEnabled/setCameraEnabled without try/catch and
-     * can crash the process when permission is missing or the camera fails to open.
-     */
     suspend fun enableLocalMedia(
         room: Room,
         enableMic: Boolean,
@@ -116,6 +136,7 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         var error: String? = null
         if (enableMic) {
             try {
+                CrashLog.breadcrumb(appContext, "adhyayan:enable_mic")
                 room.localParticipant.setMicrophoneEnabled(true)
                 micOn = true
             } catch (e: Exception) {
@@ -124,6 +145,7 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
         if (enableCamera) {
             try {
+                CrashLog.breadcrumb(appContext, "adhyayan:enable_camera")
                 room.localParticipant.setCameraEnabled(true)
                 camOn = true
             } catch (e: Exception) {
@@ -131,6 +153,7 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                     .joinToString(" ")
             }
         }
+        CrashLog.clearBreadcrumb(appContext)
         _state.update {
             it.copy(
                 isMicEnabled = micOn,
@@ -168,5 +191,17 @@ class AdhyayanRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
     } catch (e: Exception) {
         _state.update { it.copy(errorMessage = e.message) }
         false
+    }
+
+    override fun onCleared() {
+        val room = ownedRoom
+        ownedRoom = null
+        if (room != null) {
+            runCatching {
+                room.disconnect()
+                room.release()
+            }
+        }
+        super.onCleared()
     }
 }

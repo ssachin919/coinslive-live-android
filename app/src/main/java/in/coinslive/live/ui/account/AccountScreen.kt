@@ -114,7 +114,7 @@ fun AccountScreen(auth: AuthSession) {
             }
 
             crashStack?.let { stack ->
-                Section("Last crash (internal)") {
+                Section("Last failure (internal)") {
                     Text(
                         stack.take(2500),
                         fontSize = 11.sp,

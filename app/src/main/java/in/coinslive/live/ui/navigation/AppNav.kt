@@ -60,7 +60,8 @@ object Routes {
     const val WEBINAR_LOBBY = "webinar/{$ARG_SLUG}"
     const val WEBINAR_ROOM = "webinar/{$ARG_SLUG}/room?$ARG_ROLE={$ARG_ROLE}&$ARG_TITLE={$ARG_TITLE}"
     const val ADHYAYAN_LOBBY = "adhyayan/{$ARG_SLUG}"
-    const val ADHYAYAN_ROOM = "adhyayan/{$ARG_SLUG}/room?$ARG_TITLE={$ARG_TITLE}"
+    // Keep title out of the route — query args with odd characters have crashed Navigation.
+    const val ADHYAYAN_ROOM = "adhyayan/{$ARG_SLUG}/room"
 
     fun webinarLobby(slug: String) = "webinar/${Uri.encode(slug)}"
 
@@ -71,9 +72,9 @@ object Routes {
 
     fun adhyayanLobby(slug: String) = "adhyayan/${Uri.encode(slug)}"
 
-    fun adhyayanRoom(slug: String, title: String?): String {
-        val base = "adhyayan/${Uri.encode(slug)}/room"
-        return if (title.isNullOrBlank()) base else "$base?$ARG_TITLE=${Uri.encode(title)}"
+    fun adhyayanRoom(slug: String, title: String? = null): String {
+        // Title is intentionally unused in the route (see ADHYAYAN_ROOM).
+        return "adhyayan/${Uri.encode(slug)}/room"
     }
 
     fun lobbyFor(kind: LiveRoomKind, slug: String): String = when (kind) {
@@ -174,11 +175,6 @@ private fun SignedInNavHost(auth: AuthSession) {
             Routes.ADHYAYAN_ROOM,
             arguments = listOf(
                 navArgument(Routes.ARG_SLUG) { type = NavType.StringType },
-                navArgument(Routes.ARG_TITLE) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
             ),
         ) {
             AdhyayanRoomScreen(onExit = { nav.popBackStack() })
