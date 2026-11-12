@@ -6,20 +6,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import `in`.coinslive.live.CoinsLiveApp
 import `in`.coinslive.live.ui.navigation.Routes
+import `in`.coinslive.live.ui.room.LiveKitRoomFactory
 import `in`.coinslive.live.util.CrashLog
-import io.livekit.android.AudioOptions
-import io.livekit.android.LiveKit
-import io.livekit.android.LiveKitOverrides
-import io.livekit.android.RoomOptions
-import io.livekit.android.audio.AudioHandler
 import io.livekit.android.room.Room
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class AdhyayanRoomState(
     val connectionState: String = "Idle",
@@ -73,27 +67,8 @@ class AdhyayanRoomViewModel(
                     )
                 }
 
-                CrashLog.breadcrumb(appContext, "adhyayan:livekit_init")
-                withContext(Dispatchers.Main.immediate) {
-                    runCatching { LiveKit.init(appContext) }
-                }
-
                 CrashLog.breadcrumb(appContext, "adhyayan:livekit_create")
-                val room = withContext(Dispatchers.Main.immediate) {
-                    LiveKit.create(
-                        appContext = appContext,
-                        options = RoomOptions(adaptiveStream = true, dynacast = true),
-                        overrides = LiveKitOverrides(
-                            // Avoid AudioSwitch/Bluetooth paths that can hard-crash on some OEMs.
-                            audioOptions = AudioOptions(
-                                audioHandler = object : AudioHandler {
-                                    override fun start() = Unit
-                                    override fun stop() = Unit
-                                },
-                            ),
-                        ),
-                    )
-                }
+                val room = LiveKitRoomFactory.create(appContext)
                 ownedRoom = room
                 _state.update { it.copy(room = room) }
 

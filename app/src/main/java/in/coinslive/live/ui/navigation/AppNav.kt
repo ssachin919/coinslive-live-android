@@ -58,16 +58,16 @@ object Routes {
     const val ARG_ROLE = "role"
 
     const val WEBINAR_LOBBY = "webinar/{$ARG_SLUG}"
-    const val WEBINAR_ROOM = "webinar/{$ARG_SLUG}/room?$ARG_ROLE={$ARG_ROLE}&$ARG_TITLE={$ARG_TITLE}"
+    const val WEBINAR_ROOM = "webinar/{$ARG_SLUG}/room?$ARG_ROLE={$ARG_ROLE}"
     const val ADHYAYAN_LOBBY = "adhyayan/{$ARG_SLUG}"
     // Keep title out of the route — query args with odd characters have crashed Navigation.
     const val ADHYAYAN_ROOM = "adhyayan/{$ARG_SLUG}/room"
 
     fun webinarLobby(slug: String) = "webinar/${Uri.encode(slug)}"
 
-    fun webinarRoom(slug: String, title: String?, role: WebinarClientRole): String {
-        val base = "webinar/${Uri.encode(slug)}/room?$ARG_ROLE=${role.wire}"
-        return if (title.isNullOrBlank()) base else "$base&$ARG_TITLE=${Uri.encode(title)}"
+    fun webinarRoom(slug: String, title: String? = null, role: WebinarClientRole): String {
+        // Title is intentionally unused in the route (see WEBINAR_ROOM).
+        return "webinar/${Uri.encode(slug)}/room?$ARG_ROLE=${role.wire}"
     }
 
     fun adhyayanLobby(slug: String) = "adhyayan/${Uri.encode(slug)}"
@@ -149,11 +149,6 @@ private fun SignedInNavHost(auth: AuthSession) {
                 navArgument(Routes.ARG_ROLE) {
                     type = NavType.StringType
                     defaultValue = WebinarClientRole.HOST.wire
-                },
-                navArgument(Routes.ARG_TITLE) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
                 },
             ),
         ) {

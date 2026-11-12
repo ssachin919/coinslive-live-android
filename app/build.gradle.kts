@@ -26,8 +26,8 @@ android {
         applicationId = "in.coinslive.live"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.coinslive.in\"")
         // Clerk publishable keys are public by design (same as iOS Config.xcconfig).

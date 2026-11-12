@@ -1,7 +1,8 @@
 package `in`.coinslive.live.ui.webinar
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.coinslive.live.CoinsLiveApp
 import `in`.coinslive.live.api.CoinsLiveApiException
@@ -9,12 +10,13 @@ import `in`.coinslive.live.api.HostInboxMessage
 import `in`.coinslive.live.api.HostQuestion
 import `in`.coinslive.live.api.LiveJoinRequest
 import `in`.coinslive.live.api.LiveRoomKind
-import `in`.coinslive.live.api.LiveTokenResponse
 import `in`.coinslive.live.api.WebinarBroadcast
 import `in`.coinslive.live.api.WebinarClientRole
 import `in`.coinslive.live.api.WebinarParticipant
 import `in`.coinslive.live.config.AppConfig
 import `in`.coinslive.live.ui.navigation.Routes
+import `in`.coinslive.live.ui.room.LiveKitRoomFactory
+import `in`.coinslive.live.util.CrashLog
 import io.livekit.android.room.Room
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,14 +34,14 @@ data class WebinarRoomState(
     val status: String = "scheduled",
     val attendeeCount: Int = 0,
     val participants: List<WebinarParticipant> = emptyList(),
-    val isMicEnabled: Boolean = true,
-    val isCameraEnabled: Boolean = true,
+    val isMicEnabled: Boolean = false,
+    val isCameraEnabled: Boolean = false,
     val role: WebinarClientRole = WebinarClientRole.HOST,
     val questions: List<HostQuestion> = emptyList(),
     val messages: List<HostInboxMessage> = emptyList(),
     val broadcasts: List<WebinarBroadcast> = emptyList(),
-    /** Non-null once the LiveKit token was fetched; the screen then mounts `RoomScope`. */
-    val liveToken: LiveTokenResponse? = null,
+    /** Non-null once LiveKit Room is created and connect has been attempted. */
+    val room: Room? = null,
     val isConnected: Boolean = false,
 ) {
     val isHost: Boolean get() = role == WebinarClientRole.HOST
@@ -50,28 +52,38 @@ data class WebinarRoomState(
 }
 
 /**
- * Drives the workshop room: token, status polling and Q&A / messages / announcements.
- * LiveKit itself lives in `RoomScope` (Compose); the `Room` is passed into media actions.
+ * Drives the workshop room: token, LiveKit connect, status polling, Q&A / messages.
  */
-class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
+class WebinarRoomViewModel(
+    application: Application,
+    savedStateHandle: SavedStateHandle,
+) : AndroidViewModel(application) {
     private val app = CoinsLiveApp.instance
     private val api = app.api
     private val auth = app.auth
+    private val appContext = application.applicationContext
 
     val slug: String = savedStateHandle.get<String>(Routes.ARG_SLUG).orEmpty()
     private val initialTitle: String? = savedStateHandle.get<String>(Routes.ARG_TITLE)
     private val role: WebinarClientRole =
         WebinarClientRole.fromWire(savedStateHandle.get<String>(Routes.ARG_ROLE))
 
-    private val _state = MutableStateFlow(WebinarRoomState(title = initialTitle, role = role))
+    private val _state = MutableStateFlow(
+        WebinarRoomState(
+            title = initialTitle,
+            role = role,
+            isMicEnabled = false,
+            isCameraEnabled = false,
+        ),
+    )
     val state: StateFlow<WebinarRoomState> = _state.asStateFlow()
 
     val shareUrl: String get() = AppConfig.webinarShareUrl(slug)
 
     private var started = false
-    private var hasConnected = false
     private var intentionalLeave = false
     private var accessToken: String? = null
+    private var ownedRoom: Room? = null
 
     private var statusJob: Job? = null
     private var participantsJob: Job? = null
@@ -81,7 +93,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
 
     // region Lifecycle
 
-    fun start() {
+    fun start(enableMic: Boolean, enableCamera: Boolean) {
         if (started) return
         started = true
         viewModelScope.launch {
@@ -111,7 +123,8 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                     }
                 }
 
-                _state.update { it.copy(connectionState = "Getting ready…") }
+                CrashLog.breadcrumb(appContext, "webinar:fetch_token")
+                _state.update { it.copy(connectionState = "Getting ready…", errorMessage = null) }
                 val tokenResponse = api.fetchLiveToken(
                     LiveJoinRequest(
                         kind = LiveRoomKind.WEBINAR,
@@ -125,20 +138,38 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                     it.copy(
                         connectionState = "Connecting…",
                         status = tokenResponse.status ?: it.status,
-                        isMicEnabled = isHost,
-                        isCameraEnabled = isHost,
-                        liveToken = tokenResponse,
                     )
                 }
+
+                CrashLog.breadcrumb(appContext, "webinar:livekit_create")
+                val room = LiveKitRoomFactory.create(appContext)
+                ownedRoom = room
+                _state.update { it.copy(room = room) }
+
+                CrashLog.breadcrumb(appContext, "webinar:livekit_connect")
+                room.connect(tokenResponse.url, tokenResponse.token)
+                CrashLog.breadcrumb(appContext, "webinar:connected")
+                CrashLog.clearBreadcrumb(appContext)
+
+                onRoomConnected()
+                if (canPublishForMedia()) {
+                    enableLocalMedia(room, enableMic, enableCamera)
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(connectionState = "Failed", errorMessage = e.message) }
+                CrashLog.write(appContext, e)
+                _state.update {
+                    it.copy(
+                        connectionState = "Failed",
+                        errorMessage = e.message ?: "Could not join the room.",
+                    )
+                }
             }
         }
     }
 
-    /** Called by `RoomScope.onConnected`. */
-    fun onRoomConnected() {
-        hasConnected = true
+    private fun canPublishForMedia(): Boolean = _state.value.canPublishMedia
+
+    private fun onRoomConnected() {
         _state.update { it.copy(connectionState = "Connected", isConnected = true, errorMessage = null) }
         viewModelScope.launch {
             if (isHost) {
@@ -150,10 +181,6 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
     }
 
-    /**
-     * Enable local A/V after connect. Prefer this over RoomScope's `audio`/`video` flags,
-     * which enable media without try/catch and can crash on permission/camera failures.
-     */
     suspend fun enableLocalMedia(
         room: Room,
         enableMic: Boolean,
@@ -168,6 +195,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         var error: String? = null
         if (enableMic) {
             try {
+                CrashLog.breadcrumb(appContext, "webinar:enable_mic")
                 room.localParticipant.setMicrophoneEnabled(true)
                 micOn = true
             } catch (e: Exception) {
@@ -176,6 +204,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
         if (enableCamera) {
             try {
+                CrashLog.breadcrumb(appContext, "webinar:enable_camera")
                 room.localParticipant.setCameraEnabled(true)
                 camOn = true
             } catch (e: Exception) {
@@ -183,6 +212,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                     .joinToString(" ")
             }
         }
+        CrashLog.clearBreadcrumb(appContext)
         _state.update {
             it.copy(
                 isMicEnabled = micOn,
@@ -192,23 +222,13 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         }
     }
 
-    /** Called by `RoomScope.onDisconnected` (also fires for the initial disconnected state). */
     fun onRoomDisconnected() {
-        if (!hasConnected) return
+        if (!_state.value.isConnected) return
         _state.update { it.copy(connectionState = "Disconnected", isConnected = false) }
         if (isHost && !intentionalLeave && !_state.value.isEnded) {
             viewModelScope.launch {
                 runCatching { api.postWebinarStatus(slug, "host_disconnect", auth.bearerToken()) }
             }
-        }
-    }
-
-    fun onRoomError(error: Exception?) {
-        _state.update {
-            it.copy(
-                connectionState = "Failed",
-                errorMessage = error?.message ?: "Could not connect to the room.",
-            )
         }
     }
 
@@ -258,7 +278,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         val next = !_state.value.isMicEnabled
         try {
             room.localParticipant.setMicrophoneEnabled(next)
-            _state.update { it.copy(isMicEnabled = next) }
+            _state.update { it.copy(isMicEnabled = next, errorMessage = null) }
         } catch (e: Exception) {
             _state.update { it.copy(errorMessage = e.message) }
         }
@@ -269,7 +289,7 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         val next = !_state.value.isCameraEnabled
         try {
             room.localParticipant.setCameraEnabled(next)
-            _state.update { it.copy(isCameraEnabled = next) }
+            _state.update { it.copy(isCameraEnabled = next, errorMessage = null) }
         } catch (e: Exception) {
             _state.update { it.copy(errorMessage = e.message) }
         }
@@ -416,6 +436,14 @@ class WebinarRoomViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
 
     override fun onCleared() {
         cancelPolling()
+        val room = ownedRoom
+        ownedRoom = null
+        if (room != null) {
+            runCatching {
+                room.disconnect()
+                room.release()
+            }
+        }
         super.onCleared()
     }
 }
