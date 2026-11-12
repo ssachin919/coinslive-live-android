@@ -26,8 +26,8 @@ android {
         applicationId = "in.coinslive.live"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.coinslive.in\"")
         // Clerk publishable keys are public by design (same as iOS Config.xcconfig).
@@ -43,6 +43,9 @@ android {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
+
+    // Required so AGP can strip/package native debug symbols into the AAB for Play.
+    ndkVersion = "27.0.12077973"
 
     signingConfigs {
         create("release") {
@@ -84,7 +87,8 @@ android {
                 "proguard-rules.pro",
             )
             ndk {
-                debugSymbolLevel = "full"
+                // SYMBOL_TABLE keeps Play native crashes readable without a huge symbols blob.
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
             signingConfigs.getByName("release").storeFile?.let {
                 signingConfig = signingConfigs.getByName("release")

@@ -50,6 +50,14 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK (native debug symbols for Play)
+        run: |
+          sdkmanager --install "ndk;27.0.12077973"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
       - name: Decode upload keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -78,11 +86,44 @@ jobs:
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
+      - name: Prepare native debug symbols (fallback zip)
+        id: native_symbols
+        run: |
+          # Prefer AGP-generated zip; otherwise zip merged native libs for the Play uploader.
+          OUT_DIR="app/build/outputs/native-debug-symbols/release"
+          OUT_ZIP="$OUT_DIR/native-debug-symbols.zip"
+          mkdir -p "$OUT_DIR"
+          if [ -f "$OUT_ZIP" ]; then
+            echo "path=$OUT_ZIP" >> "$GITHUB_OUTPUT"
+            echo "Found AGP native-debug-symbols.zip"
+            exit 0
+          fi
+          SRC="$(find app/build/intermediates/merged_native_libs -type d -path '*/release/*/out/lib' 2>/dev/null | head -n1)"
+          if [ -z "$SRC" ]; then
+            SRC="$(find app/build/intermediates/merged_native_libs -type d -name lib 2>/dev/null | head -n1)"
+          fi
+          if [ -n "$SRC" ] && [ -d "$SRC" ]; then
+            (cd "$SRC" && zip -r "$GITHUB_WORKSPACE/$OUT_ZIP" ./*)
+            echo "path=$OUT_ZIP" >> "$GITHUB_OUTPUT"
+            echo "Created native-debug-symbols.zip from $SRC"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No native debug symbols found to upload separately (AAB may still embed them)."
+          fi
+
       - name: Upload mapping file
         uses: actions/upload-artifact@v4
         with:
           name: mapping-release
           path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
+
+      - name: Upload native debug symbols artifact
+        if: steps.native_symbols.outputs.path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-debug-symbols
+          path: ${{ steps.native_symbols.outputs.path }}
           if-no-files-found: warn
 
       - name: Resolve Play track and status
@@ -115,6 +156,8 @@ jobs:
           tracks: ${{ steps.release_meta.outputs.track }}
           status: ${{ steps.release_meta.outputs.status }}
           # mappingFile is only present when R8 minify is enabled.
+          # Native symbols: embedded in the AAB when NDK is present; also upload zip when available.
+          debugSymbols: ${{ steps.native_symbols.outputs.path }}
 
   notify-sibling:
     name: Ask about iOS sibling release
