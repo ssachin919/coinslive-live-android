@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import `in`.coinslive.live.theme.CoinsLiveColors
 
@@ -44,11 +46,11 @@ fun MediaControlBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(CoinsLiveColors.Navy.copy(alpha = 0.92f))
+            .background(CoinsLiveColors.NavyDeep.copy(alpha = 0.96f))
             .navigationBarsPadding()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showMediaToggles) {
@@ -74,18 +76,24 @@ fun MediaControlBar(
         if (showGoLive && onGoLive != null) {
             Button(
                 onClick = onGoLive,
-                colors = ButtonDefaults.buttonColors(containerColor = CoinsLiveColors.Live, contentColor = Color.White),
-            ) { Text("Go Live") }
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CoinsLiveColors.Live,
+                    contentColor = Color.White,
+                ),
+            ) { Text("Go Live", fontWeight = FontWeight.SemiBold) }
         }
         if (showEnd && onEnd != null) {
             OutlinedButton(
                 onClick = onEnd,
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF8A80)),
             ) { Text("End") }
         }
         if (onLeave != null) {
             OutlinedButton(
                 onClick = onLeave,
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
             ) { Text("Leave") }
         }
@@ -101,9 +109,10 @@ private fun ToggleButton(
 ) {
     FilledTonalButton(
         onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = if (active) activeColor else Color(0xFFB71C1C),
+            containerColor = if (active) activeColor else CoinsLiveColors.LiveText,
             contentColor = Color.White,
         ),
-    ) { Text(label) }
+    ) { Text(label, fontWeight = FontWeight.Medium) }
 }

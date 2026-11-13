@@ -1,6 +1,7 @@
 package `in`.coinslive.live.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -35,36 +37,51 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.coinslive.live.theme.CoinsLiveColors
-import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.theme.CoinsLiveFormat
+import `in`.coinslive.live.theme.CoinsLiveTheme
+import `in`.coinslive.live.theme.SpaceGroteskFamily
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoinsLiveTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
-    onDark: Boolean = true,
+    onDark: Boolean = false,
     actions: @Composable () -> Unit = {},
 ) {
-    val container = if (onDark) CoinsLiveColors.Navy else CoinsLiveColors.Paper
+    val container = if (onDark) CoinsLiveColors.Navy else Color.White
     val content = if (onDark) Color.White else CoinsLiveColors.Ink
-    TopAppBar(
-        title = { Text(title, maxLines = 1, fontWeight = FontWeight.SemiBold) },
-        navigationIcon = {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    Column {
+        TopAppBar(
+            title = {
+                Text(
+                    title,
+                    maxLines = 1,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                )
+            },
+            navigationIcon = {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
-            }
-        },
-        actions = { actions() },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = container,
-            titleContentColor = content,
-            navigationIconContentColor = content,
-            actionIconContentColor = content,
-        ),
-    )
+            },
+            actions = { actions() },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = container,
+                titleContentColor = content,
+                navigationIconContentColor = content,
+                actionIconContentColor = content,
+            ),
+        )
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = if (onDark) Color.White.copy(alpha = 0.08f) else CoinsLiveColors.Border,
+        )
+    }
 }
 
 @Composable
@@ -77,23 +94,41 @@ fun CoinsLiveWordmark(
 }
 
 @Composable
-fun StatusChip(status: String, modifier: Modifier = Modifier) {
-    val color = when (status.lowercase()) {
-        "live" -> CoinsLiveColors.Live
-        "backstage" -> CoinsLiveColors.Tan
-        "ended" -> CoinsLiveColors.Slate
-        else -> CoinsLiveColors.Brand
+fun StatusChip(status: String, modifier: Modifier = Modifier, onDark: Boolean = false) {
+    val key = status.lowercase()
+    val (bg, fg) = when {
+        onDark && key == "live" -> CoinsLiveColors.Live.copy(alpha = 0.2f) to Color(0xFFFF8A80)
+        onDark && key == "backstage" -> CoinsLiveColors.Tan.copy(alpha = 0.2f) to CoinsLiveColors.Tan
+        onDark && key == "ended" -> Color.White.copy(alpha = 0.12f) to CoinsLiveColors.OnDarkMuted
+        onDark -> CoinsLiveColors.Brand.copy(alpha = 0.2f) to CoinsLiveColors.BrandOnDark
+        key == "live" -> CoinsLiveColors.LiveTint to CoinsLiveColors.LiveText
+        key == "backstage" -> CoinsLiveColors.TanTint to CoinsLiveColors.TanText
+        key == "ended" -> CoinsLiveColors.EndedTint to CoinsLiveColors.Slate
+        else -> CoinsLiveColors.BrandTint to CoinsLiveColors.BrandText
     }
-    Text(
-        text = CoinsLiveFormat.statusLabel(status),
-        color = color,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.18f))
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
             .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (key == "live") {
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(CoinsLiveColors.Live),
+            )
+        }
+        Text(
+            text = CoinsLiveFormat.statusLabel(status),
+            color = fg,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.4.sp,
+        )
+    }
 }
 
 @Composable
@@ -105,16 +140,22 @@ fun CoinsLivePrimaryButton(
     isLoading: Boolean = false,
     enabled: Boolean = true,
 ) {
+    val labelColor = when (tint) {
+        CoinsLiveColors.Tan -> CoinsLiveColors.Navy
+        else -> Color.White
+    }
     Button(
         onClick = onClick,
         enabled = enabled && !isLoading,
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = tint,
-            contentColor = if (tint == CoinsLiveColors.Tan) CoinsLiveColors.Navy else Color.White,
+            contentColor = labelColor,
+            disabledContainerColor = tint.copy(alpha = 0.38f),
+            disabledContentColor = labelColor.copy(alpha = 0.7f),
         ),
         contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
@@ -122,15 +163,15 @@ fun CoinsLivePrimaryButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(22.dp),
                 strokeWidth = 2.dp,
-                color = Color.White,
+                color = labelColor,
             )
         } else {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text(title, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
-/** White rounded card used on navy and paper backgrounds. */
+/** White bordered card used on light canvas and navy shells. */
 @Composable
 fun CoinsLiveCard(
     modifier: Modifier = Modifier,
@@ -141,8 +182,9 @@ fun CoinsLiveCard(
             Column(
                 modifier = modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(CoinsLiveColors.CardElevated)
+                    .border(1.dp, CoinsLiveColors.Border, RoundedCornerShape(12.dp))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -183,9 +225,24 @@ fun ErrorText(message: String?, modifier: Modifier = Modifier, onDark: Boolean =
 @Composable
 fun CenteredLoading(modifier: Modifier = Modifier, label: String? = null) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             CircularProgressIndicator(color = CoinsLiveColors.Brand)
-            if (label != null) Text(label, color = CoinsLiveColors.OnDarkMuted)
+            if (label != null) {
+                Text(label, color = CoinsLiveColors.OnLightMuted, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
+}
+
+@Composable
+fun SectionOverline(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        modifier = modifier,
+        style = MaterialTheme.typography.labelSmall,
+        color = CoinsLiveColors.OnLightMuted,
+    )
 }

@@ -186,7 +186,7 @@ fun AdhyayanLobbyScreen(
 
     CoinsLiveTheme(paper = true) {
         Scaffold(
-            containerColor = CoinsLiveColors.Paper,
+            containerColor = CoinsLiveColors.Canvas,
             topBar = { CoinsLiveTopBar(title = state.title ?: "Adhyayan", onBack = onBack, onDark = false) },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
@@ -198,7 +198,7 @@ fun AdhyayanLobbyScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     CoinsLiveCard {
-                        Text("Adhyayan", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                        Text("Adhyayan", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.TanText)
                         state.title?.let { LabeledRow("Title", it) }
                         LabeledRow("Slug", viewModel.slug)
                         LabeledRow("Status", CoinsLiveFormat.statusLabel(state.status))
@@ -212,7 +212,7 @@ fun AdhyayanLobbyScreen(
 
                     if (state.isHost) {
                         CoinsLiveCard {
-                            Text("Host", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                            Text("Host", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.TanText)
                             if (state.status == "scheduled") {
                                 CoinsLivePrimaryButton(
                                     title = "Open prep room",
@@ -230,7 +230,6 @@ fun AdhyayanLobbyScreen(
                             if (state.status == "live" || state.status == "backstage") {
                                 CoinsLivePrimaryButton(
                                     title = "Enter room",
-                                    tint = CoinsLiveColors.Navy,
                                     onClick = { onEnterRoom(state.title) },
                                 )
                             }
@@ -246,7 +245,7 @@ fun AdhyayanLobbyScreen(
                         }
                     } else {
                         CoinsLiveCard {
-                            Text("Join", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                            Text("Join", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.TanText)
                             when {
                                 !state.isAdmitted -> {
                                     if (state.accessMode == "private") {

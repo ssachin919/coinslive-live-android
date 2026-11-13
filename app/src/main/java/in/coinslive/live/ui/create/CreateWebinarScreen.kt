@@ -96,7 +96,7 @@ fun CreateWebinarScreen(
 
     CoinsLiveTheme(paper = true) {
         Scaffold(
-            containerColor = CoinsLiveColors.Paper,
+            containerColor = CoinsLiveColors.Canvas,
             topBar = { CoinsLiveTopBar(title = "New workshop", onBack = onBack, onDark = false) },
         ) { padding ->
             Column(

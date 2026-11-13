@@ -358,7 +358,7 @@ private fun WebinarSidePanel(
     var selected by remember { mutableStateOf(SideTab.QA) }
     if (selected !in tabs) selected = tabs.first()
 
-    Column(modifier = modifier.background(CoinsLiveColors.Paper)) {
+    Column(modifier = modifier.background(CoinsLiveColors.Canvas)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -372,8 +372,16 @@ private fun WebinarSidePanel(
                     onClick = { selected = tab },
                     label = { Text(tab.label) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = CoinsLiveColors.Brand,
-                        selectedLabelColor = Color.White,
+                        containerColor = Color.White,
+                        labelColor = CoinsLiveColors.Body,
+                        selectedContainerColor = CoinsLiveColors.BrandTint,
+                        selectedLabelColor = CoinsLiveColors.BrandText,
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selected == tab,
+                        borderColor = CoinsLiveColors.Border,
+                        selectedBorderColor = CoinsLiveColors.Brand.copy(alpha = 0.35f),
                     ),
                 )
             }

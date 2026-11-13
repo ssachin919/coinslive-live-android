@@ -1,6 +1,7 @@
 package `in`.coinslive.live.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,14 +10,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,20 +35,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.theme.CoinsLiveColors
+import `in`.coinslive.live.theme.CoinsLiveFormat
+import `in`.coinslive.live.theme.SpaceGroteskFamily
 import `in`.coinslive.live.ui.components.CenteredLoading
-import `in`.coinslive.live.ui.components.CoinsLiveTopBar
 import `in`.coinslive.live.ui.components.CoinsLiveWordmark
 import `in`.coinslive.live.ui.components.ErrorText
+import `in`.coinslive.live.ui.components.SectionOverline
 import `in`.coinslive.live.ui.components.StatusChip
-import `in`.coinslive.live.theme.CoinsLiveFormat
 
 private data class SessionItem(
     val id: String,
+    val kind: String,
     val title: String,
     val status: String,
     val scheduledAt: String?,
@@ -66,35 +72,23 @@ fun HomeScreen(
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     val workshopItems = state.workshops.map { workshop ->
-        SessionItem(workshop.id, workshop.title, workshop.status, workshop.scheduledAt) {
+        SessionItem(workshop.id, "Workshop", workshop.title, workshop.status, workshop.scheduledAt) {
             onOpenWorkshop(workshop.slug)
         }
     }
     val adhyayanItems = state.adhyayanSessions.map { session ->
-        SessionItem(session.id, session.title, session.status, session.scheduledAt) {
+        SessionItem(session.id, "Adhyayan", session.title, session.status, session.scheduledAt) {
             onOpenAdhyayan(session.slug)
         }
     }
+    val liveItems = (workshopItems + adhyayanItems).filter {
+        it.status.equals("live", ignoreCase = true) || it.status.equals("backstage", ignoreCase = true)
+    }
+    val upcomingItems = (workshopItems + adhyayanItems).filter { item ->
+        liveItems.none { it.id == item.id }
+    }
 
-    Scaffold(
-        containerColor = CoinsLiveColors.Navy,
-        topBar = {
-            Box {
-                CoinsLiveTopBar(title = "") {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
-                CoinsLiveWordmark(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 20.dp),
-                    compact = true,
-                    onDark = true,
-                )
-            }
-        },
-    ) { padding ->
+    Scaffold(containerColor = CoinsLiveColors.Canvas) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isLoading && state.hasLoadedOnce,
             onRefresh = { viewModel.refresh() },
@@ -104,23 +98,13 @@ fun HomeScreen(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "Live sessions",
-                            color = CoinsLiveColors.OnDarkPrimary,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            "Host or join a Workshop or Adhyayan room with camera and mic.",
-                            color = CoinsLiveColors.OnDarkSecondary,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    HomeHero(
+                        onRefresh = { viewModel.refresh() },
+                    )
                 }
 
                 state.minVersionWarning?.let { warning ->
@@ -131,77 +115,144 @@ fun HomeScreen(
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             modifier = Modifier
+                                .padding(horizontal = 20.dp)
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(CoinsLiveColors.Tan.copy(alpha = 0.9f))
+                                .background(CoinsLiveColors.TanTint)
+                                .border(1.dp, CoinsLiveColors.Tan.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
                                 .padding(12.dp),
                         )
                     }
                 }
 
                 item {
-                    ActionCard(
-                        title = "Start a workshop",
-                        subtitle = "You present. Attendees watch.",
-                        tint = CoinsLiveColors.Brand,
-                        onClick = onCreateWorkshop,
-                    )
-                }
-                item {
-                    ActionCard(
-                        title = "Start Adhyayan",
-                        subtitle = "Study together with camera and mic.",
-                        tint = CoinsLiveColors.Tan,
-                        onClick = onCreateAdhyayan,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        QuickActionTile(
+                            title = "Workshop",
+                            subtitle = "Host a live session",
+                            icon = Icons.Default.School,
+                            modifier = Modifier.weight(1f),
+                            onClick = onCreateWorkshop,
+                        )
+                        QuickActionTile(
+                            title = "Adhyayan",
+                            subtitle = "Study together",
+                            icon = Icons.Default.Groups,
+                            modifier = Modifier.weight(1f),
+                            accent = CoinsLiveColors.Tan,
+                            onClick = onCreateAdhyayan,
+                        )
+                    }
                 }
 
-                sessionSection(
-                    title = "Your workshops",
-                    empty = "No workshops yet. Create one above.",
-                    items = workshopItems,
-                    isLoading = state.isLoading,
-                )
-                sessionSection(
-                    title = "Your Adhyayan",
-                    empty = "Rooms you host show up here.",
-                    items = adhyayanItems,
-                    isLoading = state.isLoading,
-                )
+                if (liveItems.isNotEmpty()) {
+                    item { SectionHeader("Live now") }
+                    items(liveItems, key = { "live-${it.id}" }) { SessionRow(it) }
+                }
+
+                item { SectionHeader(if (liveItems.isEmpty()) "Your sessions" else "Upcoming") }
+
+                when {
+                    upcomingItems.isEmpty() && liveItems.isEmpty() && !state.isLoading -> {
+                        item {
+                            EmptyState(
+                                "No sessions yet",
+                                "Start a Workshop or Adhyayan to go live with camera and mic.",
+                            )
+                        }
+                    }
+                    upcomingItems.isEmpty() && liveItems.isNotEmpty() && !state.isLoading -> {
+                        item {
+                            Text(
+                                "Nothing else scheduled.",
+                                color = CoinsLiveColors.OnLightMuted,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                            )
+                        }
+                    }
+                    else -> items(upcomingItems, key = { "up-${it.id}" }) { SessionRow(it) }
+                }
 
                 state.errorMessage?.let { message ->
-                    item { ErrorText(message, onDark = true) }
+                    item {
+                        ErrorText(message, modifier = Modifier.padding(horizontal = 20.dp))
+                    }
                 }
             }
 
             if (state.isLoading && !state.hasLoadedOnce) {
-                CenteredLoading(Modifier.fillMaxSize(), label = "Loading…")
+                CenteredLoading(Modifier.fillMaxSize(), label = "Loading?")
             }
         }
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.sessionSection(
-    title: String,
-    empty: String,
-    items: List<SessionItem>,
-    isLoading: Boolean,
-) {
-    item {
+@Composable
+private fun HomeHero(onRefresh: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CoinsLiveColors.Navy)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CoinsLiveWordmark(compact = true, onDark = true, modifier = Modifier.weight(1f))
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
+            }
+        }
         Text(
-            title,
-            color = CoinsLiveColors.OnDarkAccent,
-            fontWeight = FontWeight.SemiBold,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
+            "Learn together. Build something real.",
+            color = Color.White,
+            fontFamily = SpaceGroteskFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+        )
+        Text(
+            "Host or join a Workshop or Adhyayan with camera and mic.",
+            color = CoinsLiveColors.OnDarkSecondary,
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
-    if (items.isEmpty() && !isLoading) {
-        item {
-            Text(empty, color = CoinsLiveColors.OnDarkMuted, fontSize = 13.sp)
-        }
-    } else {
-        items(items, key = { it.id }) { item -> SessionRow(item) }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        fontFamily = SpaceGroteskFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        color = CoinsLiveColors.Ink,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+    )
+}
+
+@Composable
+private fun EmptyState(title: String, body: String) {
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .border(1.dp, CoinsLiveColors.Border, RoundedCornerShape(12.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = CoinsLiveColors.Ink)
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = CoinsLiveColors.OnLightMuted)
     }
 }
 
@@ -209,60 +260,75 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sessionSection(
 private fun SessionRow(item: SessionItem) {
     Row(
         modifier = Modifier
+            .padding(horizontal = 20.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(CoinsLiveColors.CardElevated)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .border(1.dp, CoinsLiveColors.Border, RoundedCornerShape(12.dp))
             .clickable(onClick = item.onOpen)
-            .padding(14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            SectionOverline(item.kind)
             Text(
                 item.title,
                 color = CoinsLiveColors.OnLightPrimary,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                StatusChip(item.status)
-                item.scheduledAt?.let(CoinsLiveFormat::scheduledLabel)?.let { label ->
-                    Text(label, color = CoinsLiveColors.OnLightMuted, fontSize = 12.sp)
-                }
+            item.scheduledAt?.let(CoinsLiveFormat::scheduledLabel)?.let { label ->
+                Text(label, color = CoinsLiveColors.OnLightMuted, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Text("›", color = CoinsLiveColors.Brand, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        StatusChip(item.status)
     }
 }
 
 @Composable
-private fun ActionCard(
+private fun QuickActionTile(
     title: String,
     subtitle: String,
-    tint: Color,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    accent: Color = CoinsLiveColors.Brand,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(CoinsLiveColors.CardElevated)
+    Column(
+        modifier = modifier
+            .height(112.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .border(1.dp, CoinsLiveColors.Border, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(14.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(tint),
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    if (accent == CoinsLiveColors.Tan) CoinsLiveColors.TanTint else CoinsLiveColors.BrandTint,
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = if (tint == CoinsLiveColors.Tan) CoinsLiveColors.Navy else Color.White)
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (accent == CoinsLiveColors.Tan) CoinsLiveColors.TanText else CoinsLiveColors.BrandText,
+                modifier = Modifier.size(20.dp),
+            )
         }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = CoinsLiveColors.OnLightPrimary, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            Text(subtitle, color = CoinsLiveColors.OnLightSecondary, fontSize = 12.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                fontFamily = SpaceGroteskFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = CoinsLiveColors.Ink,
+            )
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = CoinsLiveColors.OnLightMuted)
         }
     }
 }

@@ -26,8 +26,8 @@ android {
         applicationId = "in.coinslive.live"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.coinslive.in\"")
         // Clerk publishable keys are public by design (same as iOS Config.xcconfig).
@@ -130,6 +130,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.text.google.fonts)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)

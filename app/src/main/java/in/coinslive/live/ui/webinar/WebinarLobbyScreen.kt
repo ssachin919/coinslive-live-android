@@ -143,7 +143,7 @@ fun WebinarLobbyScreen(
 
     CoinsLiveTheme(paper = true) {
         Scaffold(
-            containerColor = CoinsLiveColors.Paper,
+            containerColor = CoinsLiveColors.Canvas,
             topBar = { CoinsLiveTopBar(title = state.title ?: "Workshop", onBack = onBack, onDark = false) },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
@@ -155,7 +155,7 @@ fun WebinarLobbyScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     CoinsLiveCard {
-                        Text("Workshop", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                        Text("Workshop", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.BrandText)
                         state.title?.let { LabeledRow("Title", it) }
                         LabeledRow("Slug", viewModel.slug)
                         LabeledRow("Status", CoinsLiveFormat.statusLabel(state.status))
@@ -164,7 +164,7 @@ fun WebinarLobbyScreen(
 
                     if (state.isHost) {
                         CoinsLiveCard {
-                            Text("Host", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                            Text("Host", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.BrandText)
                             CoinsLivePrimaryButton(
                                 title = "Enter as host",
                                 enabled = state.status != "ended",
@@ -174,7 +174,7 @@ fun WebinarLobbyScreen(
                     }
 
                     CoinsLiveCard {
-                        Text("Attendee", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.Brand)
+                        Text("Attendee", fontWeight = FontWeight.SemiBold, color = CoinsLiveColors.BrandText)
                         if (state.hasAccessToken) {
                             CoinsLivePrimaryButton(
                                 title = "Enter as attendee",

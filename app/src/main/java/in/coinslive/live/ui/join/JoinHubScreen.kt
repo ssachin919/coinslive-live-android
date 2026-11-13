@@ -1,5 +1,7 @@
 package `in`.coinslive.live.ui.join
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,17 +27,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.CoinsLiveApp
 import `in`.coinslive.live.api.LiveRoomKind
 import `in`.coinslive.live.theme.CoinsLiveColors
+import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CoinsLivePrimaryButton
 import `in`.coinslive.live.ui.components.CoinsLiveTopBar
 import `in`.coinslive.live.ui.components.ErrorText
@@ -114,73 +118,85 @@ fun JoinHubScreen(
     var displayName by remember { mutableStateOf("") }
     var roomCode by remember { mutableStateOf("") }
 
-    Scaffold(
-        containerColor = CoinsLiveColors.Navy,
-        topBar = { CoinsLiveTopBar(title = "Join") },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Text(
-                "Paste the room slug from your invite.",
-                color = CoinsLiveColors.OnDarkSecondary,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KindChip("Workshop", kind == LiveRoomKind.WEBINAR) { kind = LiveRoomKind.WEBINAR }
-                KindChip("Adhyayan", kind == LiveRoomKind.ADHYAYAN) { kind = LiveRoomKind.ADHYAYAN }
-            }
-
-            JoinField(
-                label = "Slug",
-                value = slug,
-                onValueChange = { slug = it },
-                placeholder = "Room slug",
-                capitalization = KeyboardCapitalization.None,
-            )
-
-            if (kind == LiveRoomKind.WEBINAR) {
-                JoinField(
-                    label = "Display name",
-                    value = displayName,
-                    onValueChange = { displayName = it },
-                    placeholder = "Optional name for the host",
-                    capitalization = KeyboardCapitalization.Words,
-                )
+    CoinsLiveTheme(paper = true) {
+        Scaffold(
+            containerColor = CoinsLiveColors.Canvas,
+            topBar = { CoinsLiveTopBar(title = "Join", onDark = false) },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 Text(
-                    "Registers you, then opens the lobby.",
-                    color = CoinsLiveColors.OnDarkMuted,
-                    fontSize = 13.sp,
+                    "Paste the room slug from your invite.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CoinsLiveColors.OnLightSecondary,
                 )
-            } else {
-                JoinField(
-                    label = "Room code",
-                    value = roomCode,
-                    onValueChange = { roomCode = it },
-                    placeholder = "For private rooms",
-                    capitalization = KeyboardCapitalization.Characters,
-                )
-                Text(
-                    "Joins the room, then opens the lobby.",
-                    color = CoinsLiveColors.OnDarkMuted,
-                    fontSize = 13.sp,
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    KindChip("Workshop", kind == LiveRoomKind.WEBINAR) { kind = LiveRoomKind.WEBINAR }
+                    KindChip("Adhyayan", kind == LiveRoomKind.ADHYAYAN) { kind = LiveRoomKind.ADHYAYAN }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White)
+                        .border(1.dp, CoinsLiveColors.Border, RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    JoinField(
+                        label = "Slug",
+                        value = slug,
+                        onValueChange = { slug = it },
+                        placeholder = "Room slug",
+                        capitalization = KeyboardCapitalization.None,
+                    )
+
+                    if (kind == LiveRoomKind.WEBINAR) {
+                        JoinField(
+                            label = "Display name",
+                            value = displayName,
+                            onValueChange = { displayName = it },
+                            placeholder = "Optional name for the host",
+                            capitalization = KeyboardCapitalization.Words,
+                        )
+                        Text(
+                            "Registers you, then opens the lobby.",
+                            color = CoinsLiveColors.OnLightMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        JoinField(
+                            label = "Room code",
+                            value = roomCode,
+                            onValueChange = { roomCode = it },
+                            placeholder = "For private rooms",
+                            capitalization = KeyboardCapitalization.Characters,
+                        )
+                        Text(
+                            "Joins the room, then opens the lobby.",
+                            color = CoinsLiveColors.OnLightMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+
+                ErrorText(state.errorMessage)
+
+                CoinsLivePrimaryButton(
+                    title = if (kind == LiveRoomKind.WEBINAR) "Register and continue" else "Join Adhyayan",
+                    isLoading = state.isWorking,
+                    enabled = slug.trim().isNotEmpty(),
+                    onClick = { viewModel.join(kind, slug, displayName, roomCode, onJoined) },
                 )
             }
-
-            ErrorText(state.errorMessage, onDark = true)
-
-            CoinsLivePrimaryButton(
-                title = if (kind == LiveRoomKind.WEBINAR) "Register and continue" else "Join Adhyayan",
-                isLoading = state.isWorking,
-                enabled = slug.trim().isNotEmpty(),
-                onClick = { viewModel.join(kind, slug, displayName, roomCode, onJoined) },
-            )
         }
     }
 }
@@ -191,11 +207,18 @@ private fun KindChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label) },
+        label = { Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
         colors = FilterChipDefaults.filterChipColors(
-            labelColor = Color.White,
-            selectedContainerColor = CoinsLiveColors.Brand,
-            selectedLabelColor = Color.White,
+            containerColor = Color.White,
+            labelColor = CoinsLiveColors.Body,
+            selectedContainerColor = CoinsLiveColors.BrandTint,
+            selectedLabelColor = CoinsLiveColors.BrandText,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = CoinsLiveColors.Border,
+            selectedBorderColor = CoinsLiveColors.Brand.copy(alpha = 0.35f),
         ),
     )
 }
@@ -208,8 +231,8 @@ private fun JoinField(
     placeholder: String,
     capitalization: KeyboardCapitalization,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, color = CoinsLiveColors.OnDarkAccent, fontWeight = FontWeight.SemiBold)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, color = CoinsLiveColors.Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -217,15 +240,16 @@ private fun JoinField(
             singleLine = true,
             placeholder = { Text(placeholder) },
             keyboardOptions = KeyboardOptions(capitalization = capitalization),
+            shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = CoinsLiveColors.Canvas,
+                unfocusedContainerColor = CoinsLiveColors.Canvas,
                 focusedTextColor = CoinsLiveColors.Ink,
                 unfocusedTextColor = CoinsLiveColors.Ink,
                 focusedPlaceholderColor = CoinsLiveColors.Slate,
                 unfocusedPlaceholderColor = CoinsLiveColors.Slate,
                 focusedBorderColor = CoinsLiveColors.Brand,
-                unfocusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = CoinsLiveColors.Border,
                 cursorColor = CoinsLiveColors.Brand,
             ),
         )

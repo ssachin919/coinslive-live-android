@@ -93,7 +93,7 @@ fun CreateAdhyayanScreen(
 
     CoinsLiveTheme(paper = true) {
         Scaffold(
-            containerColor = CoinsLiveColors.Paper,
+            containerColor = CoinsLiveColors.Canvas,
             topBar = { CoinsLiveTopBar(title = "New Adhyayan", onBack = onBack, onDark = false) },
         ) { padding ->
             Column(

@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -191,12 +192,16 @@ private fun MainTabs(auth: AuthSession, nav: NavController) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val tabs = MainTab.entries
 
-    CoinsLiveTheme {
+    CoinsLiveTheme(paper = true) {
         Scaffold(
-            containerColor = CoinsLiveColors.Navy,
+            containerColor = CoinsLiveColors.Canvas,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                NavigationBar(containerColor = CoinsLiveColors.Navy, contentColor = Color.White) {
+                NavigationBar(
+                    containerColor = Color.White,
+                    contentColor = CoinsLiveColors.Ink,
+                    tonalElevation = 0.dp,
+                ) {
                     tabs.forEachIndexed { index, tab ->
                         NavigationBarItem(
                             selected = selected == index,
@@ -213,11 +218,11 @@ private fun MainTabs(auth: AuthSession, nav: NavController) {
                             },
                             label = { Text(tab.label) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color.White,
-                                selectedTextColor = CoinsLiveColors.Brand,
-                                indicatorColor = CoinsLiveColors.Brand,
-                                unselectedIconColor = CoinsLiveColors.OnDarkMuted,
-                                unselectedTextColor = CoinsLiveColors.OnDarkMuted,
+                                selectedIconColor = CoinsLiveColors.Brand,
+                                selectedTextColor = CoinsLiveColors.BrandText,
+                                indicatorColor = CoinsLiveColors.BrandTint,
+                                unselectedIconColor = CoinsLiveColors.Slate,
+                                unselectedTextColor = CoinsLiveColors.Slate,
                             ),
                         )
                     }
