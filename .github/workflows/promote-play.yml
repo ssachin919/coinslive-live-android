@@ -20,8 +20,17 @@ on:
           - internal
           - alpha
           - beta
+      to_track:
+        description: Destination track (alpha = Closed testing)
+        required: true
+        default: alpha
+        type: choice
+        options:
+          - alpha
+          - beta
+          - production
       status:
-        description: Production release status
+        description: Release status on the destination track
         required: true
         default: completed
         type: choice
@@ -34,7 +43,7 @@ permissions:
 
 jobs:
   promote:
-    name: Promote to production
+    name: Promote Play release
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -51,6 +60,7 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code }}
           VERSION_NAME: ${{ inputs.version_name }}
           FROM_TRACK: ${{ inputs.from_track }}
+          TO_TRACK: ${{ inputs.to_track }}
           RELEASE_STATUS: ${{ inputs.status }}
           RELEASE_NOTES: Host or join Workshop and Adhyayan live rooms with camera and mic on CoinsLive.
         run: |
@@ -72,36 +82,44 @@ jobs:
           service = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
           package = "in.coinslive.live"
           version_code = str(os.environ["VERSION_CODE"])
+          from_track = os.environ["FROM_TRACK"]
+          to_track = os.environ["TO_TRACK"]
+          if from_track == to_track:
+              sys.exit(f"from_track and to_track are both '{to_track}'")
+
           edit = service.edits().insert(packageName=package, body={}).execute()
           edit_id = edit["id"]
           print(f"edit {edit_id}")
 
           source = service.edits().tracks().get(
-              packageName=package, editId=edit_id, track=os.environ["FROM_TRACK"]
+              packageName=package, editId=edit_id, track=from_track
           ).execute()
           found = False
           for release in source.get("releases", []):
               codes = [str(code) for code in release.get("versionCodes", [])]
-              print(f"source {release.get('status')} {release.get('name')} codes={codes}")
+              print(f"source {from_track} {release.get('status')} {release.get('name')} codes={codes}")
               if version_code in codes:
                   found = True
           if not found:
               service.edits().delete(packageName=package, editId=edit_id).execute()
-              sys.exit(f"versionCode {version_code} is not on {os.environ['FROM_TRACK']}")
+              sys.exit(f"versionCode {version_code} is not on {from_track}")
 
-          current = service.edits().tracks().get(
-              packageName=package, editId=edit_id, track="production"
-          ).execute()
-          for release in current.get("releases", []):
-              codes = [str(code) for code in release.get("versionCodes", [])]
-              print(f"production before {release.get('status')} {release.get('name')} codes={codes}")
+          try:
+              current = service.edits().tracks().get(
+                  packageName=package, editId=edit_id, track=to_track
+              ).execute()
+              for release in current.get("releases", []):
+                  codes = [str(code) for code in release.get("versionCodes", [])]
+                  print(f"{to_track} before {release.get('status')} {release.get('name')} codes={codes}")
+          except Exception as e:
+              print(f"{to_track} before: (empty or new) {e}")
 
           updated = service.edits().tracks().update(
               packageName=package,
               editId=edit_id,
-              track="production",
+              track=to_track,
               body={
-                  "track": "production",
+                  "track": to_track,
                   "releases": [
                       {
                           "name": os.environ["VERSION_NAME"],
@@ -114,7 +132,7 @@ jobs:
                   ],
               },
           ).execute()
-          print("production after", json.dumps(updated.get("releases", []), default=str))
+          print(f"{to_track} after", json.dumps(updated.get("releases", []), default=str))
           committed = service.edits().commit(packageName=package, editId=edit_id).execute()
-          print(f"committed edit {committed.get('id')}")
+          print(f"committed edit {committed.get('id')} → {from_track} → {to_track} versionCode {version_code}")
           PY
