@@ -1,0 +1,43 @@
+---
+description: Publish Android app changes to Google Play Closed testing (alpha)
+alwaysApply: true
+---
+
+# Closed testing publish (CoinsLive Live Android)
+
+After finishing **user-facing or shippable** app changes in this repo, publish them to **Google Play Closed testing** (API track `alpha`).
+
+## When this applies
+
+- Feature work, bug fixes, UX changes under `app/`
+- Anything testers on Closed testing should install next
+
+## When to skip
+
+- Docs-only / rule-only / store-listing-only edits
+- Explicit user request not to ship
+- Commit message will include `[skip play]`
+
+## Required ship steps (in order)
+
+1. **Bump version** in `app/build.gradle.kts`:
+   - Increment `versionCode` by at least 1 (must be higher than anything already on Play)
+   - Bump `versionName` appropriately (e.g. `0.1.7` → `0.1.8`)
+2. **Commit and push to `main`** (this standing instruction authorizes commit+push for shipping these changes when the user asked to make/publish app changes, or after they confirm shipping). Prefer asking once if the session was docs-only or ambiguous.
+3. Confirm **Deploy to Google Play** runs for the push (auto on `main` → track `alpha`, status `completed`). If it does not start, run:
+   ```bash
+   gh workflow run deploy-play.yml -f track=alpha -f status=completed
+   ```
+4. Watch the run and report the Actions URL + versionName/versionCode to the user.
+5. Remind testers: Closed testing may take a few minutes to show the new build.
+
+## Track map
+
+| Play Console | Workflow `track` |
+|--------------|------------------|
+| Internal testing | `internal` |
+| **Closed testing** | **`alpha`** |
+| Open testing | `beta` |
+| Production | `production` |
+
+Do **not** default new uploads to `internal` or `production` unless the user asks.

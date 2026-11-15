@@ -20,17 +20,22 @@ Navy `#0d1b2a`, brand blue `#1e88e5`, tan `#f4a261`, paper `#f3f0ea` — same to
 
 ## Deploy (Google Play)
 
-Same pattern as Breaths by Humantra:
+**Default track: Closed testing** (`alpha`), status `completed`.
+
+- Push to `main` (app/code changes) → builds AAB and uploads to **Closed testing**
+- Tag `v*` → same (Closed testing)
+- Manual: Actions → **Deploy to Google Play** (defaults to `alpha` / `completed`)
+- Add `[skip play]` to a commit message to skip auto-upload
 
 ```bash
-# bump versionCode / versionName in app/build.gradle.kts, then:
-git tag v0.1.0
-git push origin v0.1.0
+# optional: bump versionName in app/build.gradle.kts for a clearer store label, then:
+git push origin main
+# or: git tag v0.1.8 && git push origin v0.1.8
 ```
 
-Or Actions → **Deploy to Google Play** (pick track / status).
+CI assigns a unique `versionCode` on each upload so Play never rejects a duplicate.
 
-Promote an internal build to production with Actions → **Promote Google Play track**.
+Promote Closed/Internal → production with Actions → **Promote Google Play track**.
 
 ### Required repository secrets
 
