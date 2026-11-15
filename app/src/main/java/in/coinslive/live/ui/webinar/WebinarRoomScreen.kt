@@ -59,7 +59,10 @@ import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CenteredLoading
 import `in`.coinslive.live.ui.room.MediaControlBar
 import `in`.coinslive.live.ui.room.ParticipantStage
+import `in`.coinslive.live.ui.room.PipController
+import `in`.coinslive.live.ui.room.RememberPipMeeting
 import `in`.coinslive.live.ui.room.participantLabel
+import `in`.coinslive.live.ui.room.rememberEnterPip
 import `in`.coinslive.live.theme.CoinsLiveFormat
 import `in`.coinslive.live.util.rememberMediaPermissionState
 import io.livekit.android.compose.local.RoomScope
@@ -84,6 +87,8 @@ fun WebinarRoomScreen(
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
     val permissions = rememberMediaPermissionState(requestOnEnter = state.canPublishMedia)
+    val inPip by PipController.inPip.collectAsState()
+    val enterPip = rememberEnterPip()
 
     LaunchedEffect(permissions.resolved, state.canPublishMedia) {
         // Attendees skip the permission gate; hosts wait until the prompt resolves.
@@ -94,13 +99,21 @@ fun WebinarRoomScreen(
         )
     }
 
+    val roomTitle = state.title ?: viewModel.slug
+    val pipEligible = state.room != null && state.isConnected && !state.isEnded
+    RememberPipMeeting(active = pipEligible, title = roomTitle)
+
     val leaveRoom: () -> Unit = {
         scope.launch {
+            PipController.setMeetingActive(false)
             viewModel.leave()
             onExit()
         }
     }
-    BackHandler(onBack = leaveRoom)
+    BackHandler {
+        if (pipEligible && enterPip()) return@BackHandler
+        leaveRoom()
+    }
 
     CoinsLiveTheme {
         val room = state.room
@@ -128,9 +141,12 @@ fun WebinarRoomScreen(
                         room = room,
                         state = state,
                         viewModel = viewModel,
+                        inPip = inPip,
+                        onMinimise = { enterPip() },
                         onLeave = leaveRoom,
                         onEnded = {
                             scope.launch {
+                                PipController.setMeetingActive(false)
                                 viewModel.endWebinar()
                                 onExit()
                             }
@@ -177,6 +193,8 @@ private fun WebinarRoomContent(
     room: Room,
     state: WebinarRoomState,
     viewModel: WebinarRoomViewModel,
+    inPip: Boolean,
+    onMinimise: () -> Unit,
     onLeave: () -> Unit,
     onEnded: () -> Unit,
 ) {
@@ -198,7 +216,29 @@ private fun WebinarRoomContent(
 
     val roleLabel = if (state.isHost) "Host" else "Attendee"
     val liveLabel = if (state.isLive) "LIVE" else if (state.isEnded) "Ended" else "Prep"
-    val subtitle = "$roleLabel · $liveLabel · ${state.attendeeCount} watching"
+    val subtitle = "$roleLabel ï¿½ $liveLabel ï¿½ ${state.attendeeCount} watching"
+
+    val stage: @Composable (Modifier) -> Unit = { modifier ->
+        ParticipantStage(
+            tracks = stageTracks,
+            label = stageLabel,
+            modifier = modifier,
+            showCameraPip = state.isHost && !inPip,
+            placeholder = when {
+                state.isHost -> if (state.isConnected) "Camera is off" else "Connectingâ€¦"
+                state.isEnded -> "This workshop has ended."
+                state.isLive -> "Waiting for the host's videoâ€¦"
+                else -> "Waiting for the host to go live."
+            },
+        )
+    }
+
+    if (inPip) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            stage(Modifier.fillMaxSize())
+        }
+        return
+    }
 
     Scaffold(
         containerColor = Color.Black,
@@ -216,6 +256,7 @@ private fun WebinarRoomContent(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onMinimise) { Text("Minimise", color = Color.White) }
                     if (state.isHost) {
                         IconButton(onClick = {
                             val send = Intent(Intent.ACTION_SEND).apply {
@@ -259,6 +300,7 @@ private fun WebinarRoomContent(
                         canScreenShare = false, // TODO: screen share (MediaProjection) on Android.
                         showGoLive = state.canGoLive,
                         showEnd = !state.isEnded,
+                        showMinimise = true,
                         onToggleMic = { scope.launch { viewModel.toggleMic(room) } },
                         onToggleCamera = { scope.launch { viewModel.toggleCamera(room) } },
                         onGoLive = {
@@ -274,6 +316,7 @@ private fun WebinarRoomContent(
                                 }
                             }
                         },
+                        onMinimise = onMinimise,
                         onEnd = onEnded,
                         onLeave = onLeave,
                     )
@@ -284,6 +327,8 @@ private fun WebinarRoomContent(
                         isScreenShareEnabled = false,
                         showMediaToggles = false,
                         showEnd = false,
+                        showMinimise = true,
+                        onMinimise = onMinimise,
                         onLeave = onLeave,
                     )
                 }
@@ -296,21 +341,6 @@ private fun WebinarRoomContent(
                 .padding(padding),
         ) {
             val wide = maxWidth >= 840.dp
-            val stage = @Composable { modifier: Modifier ->
-                ParticipantStage(
-                    tracks = stageTracks,
-                    label = stageLabel,
-                    modifier = modifier,
-                    showCameraPip = state.isHost,
-                    placeholder = when {
-                        state.isHost -> if (state.isConnected) "Camera is off" else "Connecting…"
-                        state.isEnded -> "This workshop has ended."
-                        state.isLive -> "Waiting for the host's video…"
-                        else -> "Waiting for the host to go live."
-                    },
-                )
-            }
-
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     stage(Modifier.weight(1f).fillMaxHeight())

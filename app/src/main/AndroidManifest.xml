@@ -41,7 +41,9 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|screenLayout|pictureInPicture"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -68,14 +70,13 @@
                     android:host="adhyayan" />
             </intent-filter>
 
-            <!-- https://www.coinslive.in/workshop/{slug}/live (App Links) -->
+            <!-- https://www.coinslive.in/workshop|adhyayan/... (App Links; www only) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:host="www.coinslive.in" />
-                <data android:host="coinslive.in" />
                 <data android:pathPrefix="/workshop/" />
                 <data android:pathPrefix="/adhyayan/" />
             </intent-filter>

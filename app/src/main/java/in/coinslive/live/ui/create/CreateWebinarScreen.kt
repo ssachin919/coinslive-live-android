@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.CoinsLiveApp
+import `in`.coinslive.live.api.WebinarSummary
 import `in`.coinslive.live.theme.CoinsLiveColors
 import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CoinsLivePrimaryButton
@@ -57,7 +58,7 @@ class CreateWebinarViewModel : ViewModel() {
         description: String,
         scheduledAtMillis: Long?,
         maxAttendees: Int,
-        onCreated: (String) -> Unit,
+        onCreated: (WebinarSummary) -> Unit,
     ) {
         viewModelScope.launch {
             _state.update { CreateUiState(isSaving = true) }
@@ -71,7 +72,7 @@ class CreateWebinarViewModel : ViewModel() {
                     bearerToken = token,
                 )
                 _state.update { CreateUiState() }
-                onCreated(webinar.slug)
+                onCreated(webinar)
             } catch (e: Exception) {
                 _state.update { CreateUiState(errorMessage = e.message ?: "Could not create workshop") }
             }
@@ -82,7 +83,7 @@ class CreateWebinarViewModel : ViewModel() {
 @Composable
 fun CreateWebinarScreen(
     onBack: () -> Unit,
-    onCreated: (String) -> Unit,
+    onCreated: (WebinarSummary) -> Unit,
     viewModel: CreateWebinarViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsState()

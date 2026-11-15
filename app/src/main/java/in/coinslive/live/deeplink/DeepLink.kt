@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.StateFlow
  * Parses:
  * - `coinslive://workshop/{slug}/live`, `coinslive://adhyayan/{slug}/live`
  * - `https://www.coinslive.in/workshop/{slug}/live`, `https://www.coinslive.in/adhyayan/{slug}/live`
+ *
+ * HTTPS App Links are www-only (apex redirects to www and fails Play Digital Asset Links).
  */
 object DeepLink {
-    private val httpsHosts = setOf("www.coinslive.in", "coinslive.in")
+    private val httpsHosts = setOf("www.coinslive.in")
 
     fun parse(uri: Uri?): LiveJoinRequest? {
         uri ?: return null

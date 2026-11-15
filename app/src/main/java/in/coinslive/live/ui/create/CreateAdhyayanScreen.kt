@@ -26,6 +26,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.CoinsLiveApp
+import `in`.coinslive.live.api.AdhyayanSummary
 import `in`.coinslive.live.theme.CoinsLiveColors
 import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CoinsLivePrimaryButton
@@ -50,7 +51,7 @@ class CreateAdhyayanViewModel : ViewModel() {
         learningGoal: String,
         accessMode: String,
         capacity: Int,
-        onCreated: (String) -> Unit,
+        onCreated: (AdhyayanSummary) -> Unit,
     ) {
         viewModelScope.launch {
             _state.update { CreateUiState(isSaving = true) }
@@ -67,7 +68,7 @@ class CreateAdhyayanViewModel : ViewModel() {
                     bearerToken = token,
                 )
                 _state.update { CreateUiState() }
-                onCreated(session.slug)
+                onCreated(session)
             } catch (e: Exception) {
                 _state.update { CreateUiState(errorMessage = e.message ?: "Could not create Adhyayan") }
             }
@@ -79,7 +80,7 @@ class CreateAdhyayanViewModel : ViewModel() {
 @Composable
 fun CreateAdhyayanScreen(
     onBack: () -> Unit,
-    onCreated: (String) -> Unit,
+    onCreated: (AdhyayanSummary) -> Unit,
     viewModel: CreateAdhyayanViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsState()

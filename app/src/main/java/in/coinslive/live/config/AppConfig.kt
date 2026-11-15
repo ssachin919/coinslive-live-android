@@ -25,7 +25,9 @@ object AppConfig {
             return raw
         }
 
-    fun webinarShareUrl(slug: String): String = "$apiBaseUrl/workshop/$slug"
+    fun webinarShareUrl(slug: String): String = "$apiBaseUrl/workshop/$slug/live"
+
+    fun adhyayanShareUrl(slug: String): String = "$apiBaseUrl/adhyayan/$slug/live"
 
     fun normalizeBaseUrl(raw: String): String {
         val trimmed = raw.trim()

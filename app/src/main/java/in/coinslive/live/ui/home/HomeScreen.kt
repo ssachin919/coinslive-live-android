@@ -1,5 +1,6 @@
 package `in`.coinslive.live.ui.home
 
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,10 +38,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import `in`.coinslive.live.api.AdhyayanSummary
+import `in`.coinslive.live.api.WebinarSummary
 import `in`.coinslive.live.theme.CoinsLiveColors
 import `in`.coinslive.live.theme.CoinsLiveFormat
 import `in`.coinslive.live.theme.SpaceGroteskFamily
@@ -55,8 +63,44 @@ private data class SessionItem(
     val title: String,
     val status: String,
     val scheduledAt: String?,
+    val subtitle: String? = null,
     val onOpen: () -> Unit,
 )
+
+private fun isLiveStatus(status: String): Boolean =
+    status.equals("live", ignoreCase = true) || status.equals("backstage", ignoreCase = true)
+
+private fun isEndedStatus(status: String): Boolean =
+    status.equals("ended", ignoreCase = true)
+
+private fun WebinarSummary.toSessionItem(onOpen: (String) -> Unit) = SessionItem(
+    id = id,
+    kind = "Workshop",
+    title = title,
+    status = status,
+    scheduledAt = scheduledAt,
+    onOpen = { onOpen(slug) },
+)
+
+private fun AdhyayanSummary.toSessionItem(onOpen: (String) -> Unit) = SessionItem(
+    id = id,
+    kind = "Adhyayan",
+    title = title,
+    status = status,
+    scheduledAt = scheduledAt,
+    subtitle = listOfNotNull(
+        topic?.takeIf { it.isNotBlank() },
+        accessMode?.let(CoinsLiveFormat::capitalize),
+        admittedCount?.let { "$it admitted" },
+    ).joinToString(" · ").ifBlank { null },
+    onOpen = { onOpen(slug) },
+)
+
+@Composable
+fun rememberMeetingsListViewModel(): MeetingsListViewModel {
+    val activity = LocalContext.current as ComponentActivity
+    return viewModel(viewModelStoreOwner = activity)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,28 +109,29 @@ fun HomeScreen(
     onOpenAdhyayan: (String) -> Unit,
     onCreateWorkshop: () -> Unit,
     onCreateAdhyayan: () -> Unit,
-    viewModel: MeetingsListViewModel = viewModel(),
+    viewModel: MeetingsListViewModel = rememberMeetingsListViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) { viewModel.refresh() }
 
-    val workshopItems = state.workshops.map { workshop ->
-        SessionItem(workshop.id, "Workshop", workshop.title, workshop.status, workshop.scheduledAt) {
-            onOpenWorkshop(workshop.slug)
+    // Refresh when returning from create / lobby so newly created rooms always appear.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    val adhyayanItems = state.adhyayanSessions.map { session ->
-        SessionItem(session.id, "Adhyayan", session.title, session.status, session.scheduledAt) {
-            onOpenAdhyayan(session.slug)
-        }
-    }
-    val liveItems = (workshopItems + adhyayanItems).filter {
-        it.status.equals("live", ignoreCase = true) || it.status.equals("backstage", ignoreCase = true)
-    }
-    val upcomingItems = (workshopItems + adhyayanItems).filter { item ->
-        liveItems.none { it.id == item.id }
-    }
+
+    val workshopItems = state.workshops.map { it.toSessionItem(onOpenWorkshop) }
+    val adhyayanItems = state.adhyayanSessions.map { it.toSessionItem(onOpenAdhyayan) }
+
+    val liveItems = (workshopItems + adhyayanItems).filter { isLiveStatus(it.status) }
+    val upcomingWorkshops = workshopItems.filterNot { isLiveStatus(it.status) || isEndedStatus(it.status) }
+    val upcomingAdhyayan = adhyayanItems.filterNot { isLiveStatus(it.status) || isEndedStatus(it.status) }
+    val endedItems = (workshopItems + adhyayanItems).filter { isEndedStatus(it.status) }.take(8)
 
     Scaffold(containerColor = CoinsLiveColors.Canvas) { padding ->
         PullToRefreshBox(
@@ -102,9 +147,7 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
-                    HomeHero(
-                        onRefresh = { viewModel.refresh() },
-                    )
+                    HomeHero(onRefresh = { viewModel.refresh() })
                 }
 
                 state.minVersionWarning?.let { warning ->
@@ -152,31 +195,51 @@ fun HomeScreen(
 
                 if (liveItems.isNotEmpty()) {
                     item { SectionHeader("Live now") }
-                    items(liveItems, key = { "live-${it.id}" }) { SessionRow(it) }
+                    items(liveItems, key = { "live-${it.kind}-${it.id}" }) { SessionRow(it) }
                 }
 
-                item { SectionHeader(if (liveItems.isEmpty()) "Your sessions" else "Upcoming") }
+                item { SectionHeader("Your Workshops") }
+                if (upcomingWorkshops.isEmpty() && !state.isLoading) {
+                    item {
+                        EmptyState(
+                            "No workshops yet",
+                            "Create a Workshop to broadcast to attendees with Q&A.",
+                        )
+                    }
+                } else {
+                    items(upcomingWorkshops, key = { "ws-${it.id}" }) { SessionRow(it) }
+                }
 
-                when {
-                    upcomingItems.isEmpty() && liveItems.isEmpty() && !state.isLoading -> {
-                        item {
-                            EmptyState(
-                                "No sessions yet",
-                                "Start a Workshop or Adhyayan to go live with camera and mic.",
-                            )
-                        }
+                item { SectionHeader("Your Adhyayan") }
+                if (upcomingAdhyayan.isEmpty() && !state.isLoading) {
+                    item {
+                        EmptyState(
+                            "No Adhyayan rooms yet",
+                            "Create a study room — it shows here as soon as it is created.",
+                        )
                     }
-                    upcomingItems.isEmpty() && liveItems.isNotEmpty() && !state.isLoading -> {
-                        item {
-                            Text(
-                                "Nothing else scheduled.",
-                                color = CoinsLiveColors.OnLightMuted,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 20.dp),
-                            )
-                        }
+                } else {
+                    items(upcomingAdhyayan, key = { "ad-${it.id}" }) { SessionRow(it) }
+                }
+
+                if (endedItems.isNotEmpty()) {
+                    item { SectionHeader("Recently ended") }
+                    items(endedItems, key = { "end-${it.kind}-${it.id}" }) { SessionRow(it) }
+                }
+
+                if (
+                    liveItems.isEmpty() &&
+                    upcomingWorkshops.isEmpty() &&
+                    upcomingAdhyayan.isEmpty() &&
+                    endedItems.isEmpty() &&
+                    !state.isLoading
+                ) {
+                    item {
+                        EmptyState(
+                            "No sessions yet",
+                            "Start a Workshop or Adhyayan to go live with camera and mic.",
+                        )
                     }
-                    else -> items(upcomingItems, key = { "up-${it.id}" }) { SessionRow(it) }
                 }
 
                 state.errorMessage?.let { message ->
@@ -187,7 +250,7 @@ fun HomeScreen(
             }
 
             if (state.isLoading && !state.hasLoadedOnce) {
-                CenteredLoading(Modifier.fillMaxSize(), label = "Loading?")
+                CenteredLoading(Modifier.fillMaxSize(), label = "Loading…")
             }
         }
     }
@@ -220,7 +283,7 @@ private fun HomeHero(onRefresh: () -> Unit) {
             lineHeight = 28.sp,
         )
         Text(
-            "Host or join a Workshop or Adhyayan with camera and mic.",
+            "Host or join a Workshop or Adhyayan with camera and mic. Minimise mid-call to keep watching in a small window.",
             color = CoinsLiveColors.OnDarkSecondary,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -277,6 +340,9 @@ private fun SessionRow(item: SessionItem) {
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 2,
             )
+            item.subtitle?.let {
+                Text(it, color = CoinsLiveColors.OnLightMuted, style = MaterialTheme.typography.bodySmall)
+            }
             item.scheduledAt?.let(CoinsLiveFormat::scheduledLabel)?.let { label ->
                 Text(label, color = CoinsLiveColors.OnLightMuted, style = MaterialTheme.typography.bodyMedium)
             }

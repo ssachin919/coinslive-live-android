@@ -9,6 +9,9 @@
 | LiveKit Workshop room (host / attendee) | Yes | Yes |
 | LiveKit Adhyayan room | Yes | Yes |
 | Mic / camera controls | Yes | Yes |
+| Picture-in-Picture (minimise mid-call) | Yes | System PiP / CallKit TBD |
+| Home: Your Workshops / Your Adhyayan | Yes | Yes |
+| Post-create list refresh + optimistic insert | Yes | Yes |
 | Screen share (publish) | TODO | ReplayKit extension |
 | Q&A / messages / broadcasts | Yes (host/attendee as wired) | Yes |
 | Play / TestFlight deploy | `deploy-play.yml` on `v*` | `ios-testflight.yml` on `ios-v*` |

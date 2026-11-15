@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -31,7 +32,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.coinslive.live.CoinsLiveApp
 import `in`.coinslive.live.api.AdhyayanDetailResponse
+import `in`.coinslive.live.api.AdhyayanSummary
+import `in`.coinslive.live.config.AppConfig
 import `in`.coinslive.live.theme.CoinsLiveColors
+import `in`.coinslive.live.theme.CoinsLiveFormat
 import `in`.coinslive.live.theme.CoinsLiveTheme
 import `in`.coinslive.live.ui.components.CenteredLoading
 import `in`.coinslive.live.ui.components.CoinsLiveCard
@@ -40,9 +44,10 @@ import `in`.coinslive.live.ui.components.CoinsLiveTopBar
 import `in`.coinslive.live.ui.components.ErrorText
 import `in`.coinslive.live.ui.components.LabeledRow
 import `in`.coinslive.live.ui.components.StatusChip
+import `in`.coinslive.live.ui.home.rememberMeetingsListViewModel
 import `in`.coinslive.live.ui.navigation.Routes
-import `in`.coinslive.live.theme.CoinsLiveFormat
 import `in`.coinslive.live.util.nilIfEmpty
+import `in`.coinslive.live.util.sharePlainText
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,10 +69,6 @@ data class AdhyayanLobbyState(
     val isWorking: Boolean = false,
 ) {
     val isAdmitted: Boolean get() = joinStatus == "admitted" || isHost
-}
-
-sealed interface AdhyayanLobbyEvent {
-    data class EnterRoom(val title: String?) : AdhyayanLobbyEvent
 }
 
 class AdhyayanLobbyViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
@@ -136,7 +137,10 @@ class AdhyayanLobbyViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
             try {
                 val token = app.auth.bearerToken()
                 val response = app.api.postAdhyayanStatus(slug, action, token)
-                response.session?.let { s -> _state.update { it.copy(status = s.status) } }
+                response.session?.let { s ->
+                    _state.update { it.copy(status = s.status) }
+                    _events.send(AdhyayanLobbyEvent.SessionUpdated(s))
+                }
                 reload(showSpinner = false)
             } catch (e: Exception) {
                 _state.update { it.copy(errorMessage = e.message ?: "Request failed") }
@@ -155,6 +159,7 @@ class AdhyayanLobbyViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
                     app.api.postAdhyayanStatus(slug, "enter_backstage", token)
                 }
                 val response = app.api.postAdhyayanStatus(slug, "go_live", token)
+                response.session?.let { _events.send(AdhyayanLobbyEvent.SessionUpdated(it)) }
                 _state.update { it.copy(status = response.session?.status ?: "live") }
                 _events.send(AdhyayanLobbyEvent.EnterRoom(_state.value.title))
             } catch (e: Exception) {
@@ -166,6 +171,11 @@ class AdhyayanLobbyViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
     }
 }
 
+sealed interface AdhyayanLobbyEvent {
+    data class EnterRoom(val title: String?) : AdhyayanLobbyEvent
+    data class SessionUpdated(val session: AdhyayanSummary) : AdhyayanLobbyEvent
+}
+
 @Composable
 fun AdhyayanLobbyScreen(
     onBack: () -> Unit,
@@ -174,12 +184,15 @@ fun AdhyayanLobbyScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var privateCode by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val meetings = rememberMeetingsListViewModel()
 
-    LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(Unit) {
+        viewModel.load()
         viewModel.events.collect { event ->
             when (event) {
                 is AdhyayanLobbyEvent.EnterRoom -> onEnterRoom(event.title)
+                is AdhyayanLobbyEvent.SessionUpdated -> meetings.upsertAdhyayanAndRefresh(event.session)
             }
         }
     }
@@ -207,6 +220,17 @@ fun AdhyayanLobbyScreen(
                         StatusChip(state.status)
                         if (state.isHost) {
                             state.roomCode?.let { LabeledRow("Room code", it) }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                context.sharePlainText(
+                                    AppConfig.adhyayanShareUrl(viewModel.slug),
+                                    "Share Adhyayan",
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Share invite link")
                         }
                     }
 

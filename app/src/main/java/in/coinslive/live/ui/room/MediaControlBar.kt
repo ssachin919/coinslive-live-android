@@ -36,10 +36,12 @@ fun MediaControlBar(
     canScreenShare: Boolean = false,
     showGoLive: Boolean = false,
     showEnd: Boolean = true,
+    showMinimise: Boolean = false,
     onToggleMic: () -> Unit = {},
     onToggleCamera: () -> Unit = {},
     onToggleScreenShare: () -> Unit = {},
     onGoLive: (() -> Unit)? = null,
+    onMinimise: (() -> Unit)? = null,
     onEnd: (() -> Unit)? = null,
     onLeave: (() -> Unit)? = null,
 ) {
@@ -83,21 +85,29 @@ fun MediaControlBar(
                 ),
             ) { Text("Go Live", fontWeight = FontWeight.SemiBold) }
         }
-        if (showEnd && onEnd != null) {
-            OutlinedButton(
-                onClick = onEnd,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF8A80)),
-            ) { Text("End") }
+        if (showMinimise && onMinimise != null) {
+            RoomActionButton("Minimise", onClick = onMinimise)
         }
-        if (onLeave != null) {
-            OutlinedButton(
-                onClick = onLeave,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-            ) { Text("Leave") }
+        if (showEnd && onEnd != null) {
+            RoomActionButton("End", onClick = onEnd, contentColor = Color(0xFFFF8A80))
+        }
+        onLeave?.let { leave ->
+            RoomActionButton("Leave", onClick = leave)
         }
     }
+}
+
+@Composable
+private fun RoomActionButton(
+    label: String,
+    onClick: () -> Unit,
+    contentColor: Color = Color.White,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = contentColor),
+    ) { Text(label) }
 }
 
 @Composable

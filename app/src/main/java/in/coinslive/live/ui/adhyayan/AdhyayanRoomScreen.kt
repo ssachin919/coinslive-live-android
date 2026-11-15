@@ -34,7 +34,10 @@ import `in`.coinslive.live.ui.components.CenteredLoading
 import `in`.coinslive.live.ui.room.MediaControlBar
 import `in`.coinslive.live.ui.room.ParticipantGrid
 import `in`.coinslive.live.ui.room.ParticipantStage
+import `in`.coinslive.live.ui.room.PipController
+import `in`.coinslive.live.ui.room.RememberPipMeeting
 import `in`.coinslive.live.ui.room.participantLabel
+import `in`.coinslive.live.ui.room.rememberEnterPip
 import `in`.coinslive.live.util.rememberMediaPermissionState
 import io.livekit.android.compose.local.RoomScope
 import io.livekit.android.compose.state.rememberTracks
@@ -50,6 +53,8 @@ fun AdhyayanRoomScreen(
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
     val permissions = rememberMediaPermissionState()
+    val inPip by PipController.inPip.collectAsState()
+    val enterPip = rememberEnterPip()
 
     LaunchedEffect(permissions.resolved) {
         if (!permissions.resolved) return@LaunchedEffect
@@ -62,8 +67,18 @@ fun AdhyayanRoomScreen(
         )
     }
 
-    val leave: () -> Unit = { onExit() }
-    BackHandler(onBack = leave)
+    val roomTitle = state.title ?: viewModel.slug
+    val connected = state.room != null && state.connectionState == "Connected"
+    RememberPipMeeting(active = connected, title = roomTitle)
+
+    val leave: () -> Unit = {
+        PipController.setMeetingActive(false)
+        onExit()
+    }
+    BackHandler {
+        if (connected && enterPip()) return@BackHandler
+        leave()
+    }
 
     CoinsLiveTheme {
         val room = state.room
@@ -81,7 +96,7 @@ fun AdhyayanRoomScreen(
                         modifier = Modifier.padding(24.dp),
                     ) {
                         Text(
-                            state.title ?: viewModel.slug,
+                            roomTitle,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 18.sp,
@@ -113,10 +128,12 @@ fun AdhyayanRoomScreen(
                         room = room,
                         state = state,
                         viewModel = viewModel,
+                        inPip = inPip,
+                        onMinimise = { enterPip() },
                         onLeave = leave,
                         onEnd = {
                             scope.launch {
-                                if (viewModel.endSession()) onExit()
+                                if (viewModel.endSession()) leave()
                             }
                         },
                     )
@@ -132,6 +149,8 @@ private fun AdhyayanRoomContent(
     room: Room,
     state: AdhyayanRoomState,
     viewModel: AdhyayanRoomViewModel,
+    inPip: Boolean,
+    onMinimise: () -> Unit,
     onLeave: () -> Unit,
     onEnd: () -> Unit,
 ) {
@@ -147,6 +166,46 @@ private fun AdhyayanRoomContent(
         runCatching { it.participant.sid.value }.getOrNull()
             ?: runCatching { it.participant.identity?.value }.getOrNull()
     }.distinct().size
+
+    val stage: @Composable (Modifier) -> Unit = { modifier ->
+        when {
+            sharer != null -> ParticipantStage(
+                tracks = tracks.filter { it.participant == sharer.participant },
+                label = participantLabel(sharer.participant),
+                modifier = modifier,
+                preferScreenShare = true,
+            )
+
+            cameraTracks.isEmpty() -> CenteredLoading(
+                modifier,
+                label = state.connectionState,
+            )
+
+            cameraTracks.size == 1 -> ParticipantStage(
+                tracks = listOf(cameraTracks.first()),
+                label = participantLabel(cameraTracks.first().participant),
+                modifier = modifier,
+                preferScreenShare = false,
+                showCameraPip = false,
+            )
+
+            else -> ParticipantGrid(
+                cameraTracks = cameraTracks,
+                modifier = modifier,
+            )
+        }
+    }
+
+    if (inPip) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+        ) {
+            stage(Modifier.fillMaxSize())
+        }
+        return
+    }
 
     Scaffold(
         containerColor = Color.Black,
@@ -168,6 +227,7 @@ private fun AdhyayanRoomContent(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onMinimise) { Text("Minimise", color = Color.White) }
                     TextButton(onClick = onLeave) { Text("Leave", color = Color(0xFFFF8A80)) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -195,8 +255,10 @@ private fun AdhyayanRoomContent(
                     isScreenShareEnabled = state.isScreenShareEnabled,
                     canScreenShare = false,
                     showEnd = state.isHost && state.status != "ended",
+                    showMinimise = true,
                     onToggleMic = { scope.launch { viewModel.toggleMic(room) } },
                     onToggleCamera = { scope.launch { viewModel.toggleCamera(room) } },
+                    onMinimise = onMinimise,
                     onEnd = onEnd,
                     onLeave = onLeave,
                 )
@@ -208,24 +270,7 @@ private fun AdhyayanRoomContent(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                sharer != null -> ParticipantStage(
-                    tracks = tracks.filter { it.participant == sharer.participant },
-                    label = participantLabel(sharer.participant),
-                    modifier = Modifier.fillMaxSize(),
-                    preferScreenShare = true,
-                )
-
-                cameraTracks.isEmpty() -> CenteredLoading(
-                    Modifier.fillMaxSize(),
-                    label = state.connectionState,
-                )
-
-                else -> ParticipantGrid(
-                    cameraTracks = cameraTracks,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            stage(Modifier.fillMaxSize())
         }
     }
 }

@@ -26,6 +26,7 @@ on:
         default: alpha
         type: choice
         options:
+          - internal
           - alpha
           - beta
           - production

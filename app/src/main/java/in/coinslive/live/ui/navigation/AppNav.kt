@@ -45,6 +45,7 @@ import `in`.coinslive.live.ui.auth.SignInScreen
 import `in`.coinslive.live.ui.create.CreateAdhyayanScreen
 import `in`.coinslive.live.ui.create.CreateWebinarScreen
 import `in`.coinslive.live.ui.home.HomeScreen
+import `in`.coinslive.live.ui.home.rememberMeetingsListViewModel
 import `in`.coinslive.live.ui.join.JoinHubScreen
 import `in`.coinslive.live.ui.webinar.WebinarLobbyScreen
 import `in`.coinslive.live.ui.webinar.WebinarRoomScreen
@@ -109,10 +110,12 @@ private fun SignedInNavHost(auth: AuthSession) {
         composable(Routes.MAIN) { MainTabs(auth, nav) }
 
         composable(Routes.CREATE_WORKSHOP) {
+            val meetings = rememberMeetingsListViewModel()
             CreateWebinarScreen(
                 onBack = { nav.popBackStack() },
-                onCreated = { slug ->
-                    nav.navigate(Routes.webinarLobby(slug)) {
+                onCreated = { webinar ->
+                    meetings.upsertWorkshopAndRefresh(webinar)
+                    nav.navigate(Routes.webinarLobby(webinar.slug)) {
                         popUpTo(Routes.CREATE_WORKSHOP) { inclusive = true }
                     }
                 },
@@ -120,10 +123,12 @@ private fun SignedInNavHost(auth: AuthSession) {
         }
 
         composable(Routes.CREATE_ADHYAYAN) {
+            val meetings = rememberMeetingsListViewModel()
             CreateAdhyayanScreen(
                 onBack = { nav.popBackStack() },
-                onCreated = { slug ->
-                    nav.navigate(Routes.adhyayanLobby(slug)) {
+                onCreated = { session ->
+                    meetings.upsertAdhyayanAndRefresh(session)
+                    nav.navigate(Routes.adhyayanLobby(session.slug)) {
                         popUpTo(Routes.CREATE_ADHYAYAN) { inclusive = true }
                     }
                 },
